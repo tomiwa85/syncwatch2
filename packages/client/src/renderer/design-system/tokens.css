@@ -1,0 +1,74 @@
+:root,
+:root[data-theme="dark"] {
+  /* Surfaces — deep navy, matching the logo backdrop */
+  --sw-bg: #080b16;
+  --sw-bg-2: #0b0f1e;
+  --sw-surface: #101627;
+  --sw-surface-raised: #161d33;
+  --sw-border: #232c47;
+  --sw-border-strong: #33406b;
+
+  /* Text */
+  --sw-text: #eef2fb;
+  --sw-text-muted: #97a1bd;
+
+  /* Brand — violet → blue gradient from the SyncWatch logo */
+  --sw-violet: #8b5cf6;
+  --sw-blue: #3b82f6;
+  --sw-accent: #7c6cff;
+  --sw-accent-hover: #6a55f5;
+  --sw-accent-fg: #ffffff;
+  --sw-gradient: linear-gradient(120deg, var(--sw-violet) 0%, var(--sw-blue) 100%);
+  --sw-gradient-soft: linear-gradient(120deg, rgba(139, 92, 246, 0.16) 0%, rgba(59, 130, 246, 0.16) 100%);
+
+  /* Status */
+  --sw-danger: #ff5d76;
+  --sw-danger-soft: rgba(255, 93, 118, 0.14);
+  --sw-success: #34e0a1;
+  --sw-success-soft: rgba(52, 224, 161, 0.14);
+  --sw-info: #56b6ff;
+  --sw-info-soft: rgba(86, 182, 255, 0.14);
+  --sw-warning: #ffb454;
+  --sw-warning-soft: rgba(255, 180, 84, 0.14);
+
+  --sw-radius: 12px;
+  --sw-radius-lg: 18px;
+
+  --sw-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
+  --sw-glow: 0 8px 28px -8px rgba(124, 108, 255, 0.55);
+  --sw-ring: rgba(124, 108, 255, 0.55);
+}
+
+:root[data-theme="light"] {
+  /* Refined light theme — cool porcelain with a faint lavender tint */
+  --sw-bg: #eef0f8;
+  --sw-bg-2: #e7e9f5;
+  --sw-surface: #ffffff;
+  --sw-surface-raised: #ffffff;
+  --sw-border: #dfe2f0;
+  --sw-border-strong: #c9cee5;
+
+  --sw-text: #171a2b;
+  --sw-text-muted: #626b86;
+
+  --sw-violet: #7c3aed;
+  --sw-blue: #2563eb;
+  --sw-accent: #6d51f0;
+  --sw-accent-hover: #5b3ee8;
+  --sw-accent-fg: #ffffff;
+  --sw-gradient: linear-gradient(120deg, var(--sw-violet) 0%, var(--sw-blue) 100%);
+  --sw-gradient-soft: linear-gradient(120deg, rgba(124, 58, 237, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
+
+  --sw-danger: #e23e5c;
+  --sw-danger-soft: rgba(226, 62, 92, 0.1);
+  --sw-success: #12a06e;
+  --sw-success-soft: rgba(18, 160, 110, 0.12);
+  --sw-info: #2b7fd4;
+  --sw-info-soft: rgba(43, 127, 212, 0.1);
+  --sw-warning: #d98317;
+  --sw-warning-soft: rgba(217, 131, 23, 0.12);
+
+  --sw-shadow: 0 24px 50px -22px rgba(31, 38, 72, 0.32);
+  --sw-glow: 0 10px 30px -10px rgba(109, 81, 240, 0.4);
+  --sw-ring: rgba(109, 81, 240, 0.45);
+}

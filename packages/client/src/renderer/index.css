@@ -1,0 +1,27 @@
+@import "./design-system/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    color: var(--sw-text);
+    font-family: Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: var(--sw-bg);
+    background-image:
+      radial-gradient(60% 55% at 15% -5%, rgba(139, 92, 246, 0.12), transparent 60%),
+      radial-gradient(55% 55% at 100% 0%, rgba(59, 130, 246, 0.12), transparent 55%);
+    background-attachment: fixed;
+  }
+  * {
+    box-sizing: border-box;
+  }
+}

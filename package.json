@@ -1,0 +1,22 @@
+{
+  "name": "syncwatch",
+  "private": true,
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:server": "pnpm --filter @syncwatch/server dev",
+    "dev:client": "pnpm --filter @syncwatch/client dev",
+    "dev": "concurrently -k -n server,client -c blue,green \"pnpm dev:server\" \"pnpm dev:client\"",
+    "db:migrate": "pnpm --filter @syncwatch/server db:migrate",
+    "db:studio": "pnpm --filter @syncwatch/server db:studio",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  }
+}

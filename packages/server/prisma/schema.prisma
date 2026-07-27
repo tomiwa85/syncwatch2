@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  displayName   String
+  createdAt     DateTime       @default(now())
+  refreshTokens RefreshToken[]
+  roomMembers   RoomMember[]
+  hostedRooms   Room[]         @relation("RoomHost")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+enum RoomVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum VideoSourceType {
+  LOCAL_FILE
+  STREAMING_URL
+}
+
+model Room {
+  id     String @id @default(uuid())
+  code   String @unique
+  hostId String
+  host   User   @relation("RoomHost", fields: [hostId], references: [id])
+
+  visibility RoomVisibility @default(PRIVATE)
+  title      String?
+
+  sourceType   VideoSourceType?
+  streamingUrl String?
+  localFileName String?
+  localFileSize BigInt?
+
+  currentTimeSeconds Float    @default(0)
+  isPlaying          Boolean  @default(false)
+  stateUpdatedAt     DateTime @default(now())
+
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  members RoomMember[]
+}
+
+model RoomMember {
+  id     String @id @default(uuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  role   String @default("member")
+
+  localFileName String?
+  localFileSize BigInt?
+  fileVerified  Boolean @default(false)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+}
