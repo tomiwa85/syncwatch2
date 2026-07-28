@@ -118,7 +118,7 @@ export async function joinRoom(userId: string, code: string, password?: string):
   const alreadyMember = room.hostId === userId || room.members.length > 0;
   if (room.passwordHash && !alreadyMember) {
     const ok = password ? await argon2.verify(room.passwordHash, password) : false;
-    if (!ok) throw new RoomError("This room needs a password", 401);
+    if (!ok) throw new RoomError("This room needs a password", 403);
   }
 
   await prisma.roomMember.upsert({

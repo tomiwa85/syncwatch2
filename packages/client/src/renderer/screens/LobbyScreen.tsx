@@ -88,7 +88,7 @@ export function LobbyScreen() {
       toast({ title: `Joined ${room.code}`, tone: "success" });
       enterRoom(room);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
+      if (err instanceof ApiError && err.status === 403) {
         // Room needs a password → open the prompt (or flag a wrong password).
         if (pwPrompt) setPwError("Wrong password");
         else setPwPrompt({ code: clean });
