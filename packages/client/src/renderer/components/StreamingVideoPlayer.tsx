@@ -38,6 +38,13 @@ export const StreamingVideoPlayer = forwardRef<PlayerHandle, StreamingVideoPlaye
         controls={false}
         width="100%"
         height="100%"
+        config={{
+          youtube: {
+            // Match YouTube's postMessage handshake to the renderer's real
+            // origin (app://bundle in the packaged app) so the embed initializes.
+            playerVars: { origin: window.location.origin },
+          },
+        }}
         onProgress={(state) => onTime?.(state.playedSeconds)}
         onDuration={(d) => onDuration?.(d)}
       />

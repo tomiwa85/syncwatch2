@@ -14,7 +14,7 @@ const mobileOrigins = new Set([
 
 /**
  * Whether a request origin is allowed.
- * - The packaged Electron app loads from `file://` → Origin is `null`/absent.
+ * - The packaged Electron app serves its renderer from the `app://` scheme.
  * - The Android (Capacitor) app uses a localhost/capacitor scheme origin.
  * - Browser (dev/web) requests are matched against the configured allow-list.
  * The API is authenticated with JWTs (no cookies), so this only governs which
@@ -22,6 +22,8 @@ const mobileOrigins = new Set([
  */
 export function isAllowedOrigin(origin?: string): boolean {
   if (!origin || origin === "null") return true;
+  // The desktop app's own renderer origin (app://bundle).
+  if (origin.startsWith("app://")) return true;
   if (mobileOrigins.has(origin)) return true;
   return allowed.includes(origin);
 }

@@ -13,9 +13,10 @@ import {
   LockIcon,
   GlobeIcon,
   FilmIcon,
+  SearchIcon,
 } from "../design-system/icons.js";
 import { ApiError } from "../api/http.js";
-import { createRoom, joinRoom, listPublicRooms } from "../api/rooms.api.js";
+import { createRoom, getRoom, joinRoom, listPublicRooms } from "../api/rooms.api.js";
 import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
 import { TopBar } from "./TopBar.js";
@@ -41,6 +42,37 @@ export function LobbyScreen() {
 
   const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(true);
+
+  // Search: live-filters the public list, and looks up an exact code (so a
+  // private room surfaces only when its full code is typed — never browsable).
+  const [search, setSearch] = useState("");
+  const [lookupResult, setLookupResult] = useState<RoomSummary | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+
+  const query = search.trim().toUpperCase();
+  const filteredPublic = query
+    ? publicRooms.filter((r) => r.code.includes(query) || (r.title ?? "").toUpperCase().includes(query))
+    : publicRooms;
+  // A private room found by exact code, not already shown among the public results.
+  const privateMatch =
+    lookupResult && !filteredPublic.some((r) => r.code === lookupResult.code) ? lookupResult : null;
+
+  useEffect(() => {
+    setLookupResult(null);
+    // Room codes are 6 chars; only look up plausible full codes.
+    if (query.length < 4 || publicRooms.some((r) => r.code === query)) return;
+    const timer = setTimeout(async () => {
+      setLookingUp(true);
+      try {
+        setLookupResult(await getRoom(query));
+      } catch {
+        setLookupResult(null);
+      } finally {
+        setLookingUp(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [query, publicRooms]);
 
   async function refreshPublic() {
     setLoadingPublic(true);
@@ -102,6 +134,55 @@ export function LobbyScreen() {
     }
   }
 
+  // Private match (exact code) first, then the live-filtered public rooms.
+  const results = [...(privateMatch ? [privateMatch] : []), ...filteredPublic];
+
+  function renderRoomCard(room: RoomSummary) {
+    const host = room.members.find((m) => m.role === "host")?.displayName ?? "someone";
+    return (
+      <Card key={room.code} className="flex items-center justify-between py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {room.members.length > 0 ? (
+              room.members.slice(0, 4).map((m) => (
+                <Avatar key={m.userId} name={m.displayName} size="sm" className="ring-2 ring-surface" />
+              ))
+            ) : (
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-raised text-muted ring-2 ring-surface">
+                <FilmIcon size={14} />
+              </span>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 font-medium">
+              <span className="tracking-widest">{room.code}</span>
+              {room.visibility === "PUBLIC" ? (
+                <Badge tone="accent">
+                  <GlobeIcon size={12} /> Public
+                </Badge>
+              ) : (
+                <Badge>
+                  <LockIcon size={12} /> Private
+                </Badge>
+              )}
+              {room.hasPassword && (
+                <Badge>
+                  <LockIcon size={12} /> Password
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted">
+              {room.members.length} watching · hosted by {host}
+            </p>
+          </div>
+        </div>
+        <Button size="sm" onClick={() => handleJoin(room.code)} disabled={joining}>
+          Join
+        </Button>
+      </Card>
+    );
+  }
+
   return (
     <div className="min-h-full">
       <TopBar />
@@ -160,52 +241,43 @@ export function LobbyScreen() {
           </Card>
         </div>
 
-        {/* Browse public rooms */}
+        {/* Browse & search rooms */}
         <section className="mt-10">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-semibold">
-              <GlobeIcon size={18} /> Public rooms
+              <GlobeIcon size={18} /> Browse rooms
             </h2>
             <Button variant="ghost" size="sm" onClick={refreshPublic}>
               Refresh
             </Button>
           </div>
 
+          {/* Search: filters public rooms live; a private room appears only on an exact code match. */}
+          <div className="relative mb-3">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+              <SearchIcon size={16} />
+            </span>
+            <Input
+              placeholder="Search by room ID or title…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 uppercase tracking-wide placeholder:normal-case placeholder:tracking-normal"
+            />
+          </div>
+
           {loadingPublic ? (
-            <Card className="text-sm text-muted">Loading public rooms…</Card>
-          ) : publicRooms.length === 0 ? (
+            <Card className="text-sm text-muted">Loading rooms…</Card>
+          ) : results.length > 0 ? (
+            <div className="flex flex-col gap-2">{results.map(renderRoomCard)}</div>
+          ) : query ? (
             <Card className="flex items-center gap-3 text-sm text-muted">
-              <FilmIcon size={18} /> No public rooms right now. Create one and make it public!
+              <SearchIcon size={18} />
+              {lookingUp ? "Searching…" : `No room matches “${query}”. Double-check the room ID.`}
             </Card>
           ) : (
-            <div className="flex flex-col gap-2">
-              {publicRooms.map((room) => (
-                <Card key={room.code} className="flex items-center justify-between py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex -space-x-2">
-                      {room.members.slice(0, 4).map((m) => (
-                        <Avatar key={m.userId} name={m.displayName} size="sm" className="ring-2 ring-surface" />
-                      ))}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 font-medium">
-                        <span className="tracking-widest">{room.code}</span>
-                        <Badge tone="accent">
-                          <GlobeIcon size={12} /> Public
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted">
-                        {room.members.length} watching · hosted by{" "}
-                        {room.members.find((m) => m.role === "host")?.displayName ?? "someone"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button size="sm" onClick={() => handleJoin(room.code)} disabled={joining}>
-                    Join
-                  </Button>
-                </Card>
-              ))}
-            </div>
+            <Card className="flex items-center gap-3 text-sm text-muted">
+              <FilmIcon size={18} /> No public rooms right now. Create one and make it public — or search a room ID above.
+            </Card>
           )}
         </section>
       </main>

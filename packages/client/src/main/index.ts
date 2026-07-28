@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, protocol } from "electron";
 import { registerFileDialogHandlers } from "./ipc/file-dialog.js";
-import { registerLocalVideoProtocol, LOCAL_VIDEO_SCHEME } from "./protocol.js";
+import { registerLocalVideoProtocol, registerAppProtocol, LOCAL_VIDEO_SCHEME, APP_SCHEME } from "./protocol.js";
 import { registerVideoConvert } from "./video-convert.js";
 
 // Prefer a real PNG logo (drop your brand PNG at resources/icon.png). Falls
@@ -19,6 +19,12 @@ protocol.registerSchemesAsPrivileged([
   {
     scheme: LOCAL_VIDEO_SCHEME,
     privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, bypassCSP: true },
+  },
+  {
+    // The renderer's own origin in production. `standard` gives it a real tuple
+    // origin (app://bundle) that embedded players like YouTube will accept.
+    scheme: APP_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
   },
 ]);
 
@@ -43,16 +49,24 @@ function createWindow() {
 
   win.once("ready-to-show", () => win.show());
 
+  // Surface renderer load failures (e.g. a bad app:// asset path) to the main log.
+  win.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    if (code === -3) return; // aborted (benign, e.g. redirects)
+    console.error(`[renderer] failed to load (${code} ${desc}): ${url}`);
+  });
+
   const devUrl = process.env["ELECTRON_RENDERER_URL"];
   if (devUrl) {
     win.loadURL(devUrl);
   } else {
-    win.loadFile(join(__dirname, "../renderer/index.html"));
+    // Serve over app:// (not file://) so the renderer has a real origin.
+    win.loadURL(`${APP_SCHEME}://bundle/index.html`);
   }
 }
 
 app.whenReady().then(() => {
   registerLocalVideoProtocol();
+  registerAppProtocol(join(__dirname, "../renderer"));
   registerFileDialogHandlers();
   registerVideoConvert();
   createWindow();
