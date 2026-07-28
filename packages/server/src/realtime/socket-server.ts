@@ -1,18 +1,30 @@
 import type { Server as HttpServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import {
   SocketEvents,
+  chatSendPayloadSchema,
   fileVerifyPayloadSchema,
   playbackActionPayloadSchema,
   playbackSeekPayloadSchema,
   roomJoinPayloadSchema,
   roomLeavePayloadSchema,
+  roomSetControlPayloadSchema,
+  subtitleClearPayloadSchema,
+  subtitleSetPayloadSchema,
   videoSetSourcePayloadSchema,
 } from "@syncwatch/shared";
 import { isAllowedOrigin } from "../config/cors.js";
 import { prisma } from "../db/prisma.js";
 import { verifyAccessToken } from "../modules/auth/auth.service.js";
-import { endRoomIfHost, getRoomByCode, joinRoom, setRoomSource } from "../modules/rooms/rooms.service.js";
+import {
+  endRoomIfHost,
+  getRoomByCode,
+  getRoomControl,
+  joinRoom,
+  setPlaybackControl,
+  setRoomSource,
+} from "../modules/rooms/rooms.service.js";
 import { roomState, toPlaybackState, toWire } from "./room-state.store.js";
 
 interface SocketData {
@@ -21,6 +33,13 @@ interface SocketData {
 }
 
 const HEARTBEAT_MS = 5000;
+
+// Whether a user may drive playback: always in EVERYONE mode, host-only in HOST mode.
+async function canControlPlayback(code: string, userId: string): Promise<boolean> {
+  const control = await getRoomControl(code);
+  if (!control) return false;
+  return control.playbackControl === "EVERYONE" || control.hostId === userId;
+}
 
 export function attachSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
@@ -78,7 +97,7 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       const parsed = playbackActionPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!socket.rooms.has(code) || !(await canControlPlayback(code, userId))) return;
       const state = await roomState.play(code, parsed.data.atTime);
       io.to(code).emit(SocketEvents.PlaybackSync, toWire(state, "user"));
     });
@@ -87,7 +106,7 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       const parsed = playbackActionPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!socket.rooms.has(code) || !(await canControlPlayback(code, userId))) return;
       const state = await roomState.pause(code, parsed.data.atTime);
       io.to(code).emit(SocketEvents.PlaybackSync, toWire(state, "user"));
     });
@@ -96,9 +115,60 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       const parsed = playbackSeekPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!socket.rooms.has(code) || !(await canControlPlayback(code, userId))) return;
       const state = await roomState.seek(code, parsed.data.toTime);
       io.to(code).emit(SocketEvents.PlaybackSync, toWire(state, "user"));
+    });
+
+    // Host toggles who can control playback.
+    socket.on(SocketEvents.RoomSetControl, async (payload) => {
+      const parsed = roomSetControlPayloadSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const code = parsed.data.roomCode.toUpperCase();
+      if (!socket.rooms.has(code)) return;
+      try {
+        const room = await setPlaybackControl(userId, code, parsed.data.playbackControl);
+        const snapshot = await roomState.snapshot(code);
+        io.to(code).emit(SocketEvents.RoomState, { room, playback: toPlaybackState(snapshot) });
+      } catch (err) {
+        socket.emit("room:error", { message: err instanceof Error ? err.message : "Could not update controls" });
+      }
+    });
+
+    // Real-time chat.
+    socket.on(SocketEvents.ChatSend, (payload) => {
+      const parsed = chatSendPayloadSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const code = parsed.data.roomCode.toUpperCase();
+      if (!socket.rooms.has(code)) return;
+      io.to(code).emit(SocketEvents.ChatMessage, {
+        id: randomUUID(),
+        userId,
+        displayName,
+        text: parsed.data.text,
+        at: new Date().toISOString(),
+      });
+    });
+
+    // Host shares subtitles (WebVTT) with the room.
+    socket.on(SocketEvents.SubtitleSet, async (payload) => {
+      const parsed = subtitleSetPayloadSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const code = parsed.data.roomCode.toUpperCase();
+      if (!socket.rooms.has(code)) return;
+      const control = await getRoomControl(code);
+      if (control?.hostId !== userId) return; // host-only
+      io.to(code).emit(SocketEvents.SubtitleChanged, { fileName: parsed.data.fileName, vtt: parsed.data.vtt });
+    });
+
+    socket.on(SocketEvents.SubtitleClear, async (payload) => {
+      const parsed = subtitleClearPayloadSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const code = parsed.data.roomCode.toUpperCase();
+      if (!socket.rooms.has(code)) return;
+      const control = await getRoomControl(code);
+      if (control?.hostId !== userId) return;
+      io.to(code).emit(SocketEvents.SubtitleCleared, {});
     });
 
     // Host chooses the video source for the room.

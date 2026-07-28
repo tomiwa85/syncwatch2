@@ -3,6 +3,9 @@ import { z } from "zod";
 export const roomVisibilitySchema = z.enum(["PUBLIC", "PRIVATE"]);
 export type RoomVisibility = z.infer<typeof roomVisibilitySchema>;
 
+export const playbackControlSchema = z.enum(["EVERYONE", "HOST"]);
+export type PlaybackControl = z.infer<typeof playbackControlSchema>;
+
 export const roomRoleSchema = z.enum(["host", "member"]);
 export type RoomRole = z.infer<typeof roomRoleSchema>;
 
@@ -44,6 +47,8 @@ export const roomSummarySchema = z.object({
   code: z.string(),
   title: z.string().nullable(),
   visibility: roomVisibilitySchema,
+  playbackControl: playbackControlSchema,
+  hasPassword: z.boolean(),
   hostId: z.string().uuid(),
   source: videoSourceSchema.nullable(),
   members: z.array(roomMemberSummarySchema),

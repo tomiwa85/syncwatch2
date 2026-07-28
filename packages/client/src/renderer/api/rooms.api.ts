@@ -4,16 +4,20 @@ import type {
   GetRoomResponse,
   JoinRoomResponse,
   ListPublicRoomsResponse,
+  PlaybackControl,
   RoomSummary,
   RoomVisibility,
   WatchHistoryEntry,
 } from "@syncwatch/shared";
 import { apiRequest } from "./http.js";
 
-export async function createRoom(visibility: RoomVisibility): Promise<RoomSummary> {
+export async function createRoom(
+  visibility: RoomVisibility,
+  opts: { playbackControl?: PlaybackControl; password?: string } = {},
+): Promise<RoomSummary> {
   const res = await apiRequest<CreateRoomResponse>("/api/rooms", {
     method: "POST",
-    body: { visibility },
+    body: { visibility, playbackControl: opts.playbackControl, password: opts.password },
   });
   return res.room;
 }
@@ -23,8 +27,11 @@ export async function getRoom(code: string): Promise<RoomSummary> {
   return res.room;
 }
 
-export async function joinRoom(code: string): Promise<RoomSummary> {
-  const res = await apiRequest<JoinRoomResponse>(`/api/rooms/${code}/join`, { method: "POST" });
+export async function joinRoom(code: string, password?: string): Promise<RoomSummary> {
+  const res = await apiRequest<JoinRoomResponse>(`/api/rooms/${code}/join`, {
+    method: "POST",
+    body: password ? { password } : {},
+  });
   return res.room;
 }
 

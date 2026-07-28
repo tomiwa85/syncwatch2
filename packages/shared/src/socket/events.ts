@@ -9,6 +9,16 @@ export const SocketEvents = {
   VideoSetSource: "video:set-source",
   VideoSourceChanged: "video:source-changed",
 
+  RoomSetControl: "room:set-control",
+
+  ChatSend: "chat:send",
+  ChatMessage: "chat:message",
+
+  SubtitleSet: "subtitle:set",
+  SubtitleChanged: "subtitle:changed",
+  SubtitleClear: "subtitle:clear",
+  SubtitleCleared: "subtitle:cleared",
+
   FileVerify: "file:verify",
   FileVerifyResult: "file:verify-result",
 

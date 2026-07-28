@@ -38,14 +38,21 @@ enum VideoSourceType {
   STREAMING_URL
 }
 
+enum PlaybackControl {
+  EVERYONE
+  HOST
+}
+
 model Room {
   id     String @id @default(uuid())
   code   String @unique
   hostId String
   host   User   @relation("RoomHost", fields: [hostId], references: [id])
 
-  visibility RoomVisibility @default(PRIVATE)
-  title      String?
+  visibility      RoomVisibility  @default(PRIVATE)
+  title           String?
+  playbackControl PlaybackControl @default(EVERYONE)
+  passwordHash    String?
 
   sourceType   VideoSourceType?
   streamingUrl String?

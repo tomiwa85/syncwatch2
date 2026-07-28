@@ -27,11 +27,17 @@ export function LobbyScreen() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [visibility, setVisibility] = useState<RoomVisibility>("PRIVATE");
+  const [createPassword, setCreatePassword] = useState("");
   const [creating, setCreating] = useState(false);
 
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string>();
+
+  // Password prompt shown when joining a protected room.
+  const [pwPrompt, setPwPrompt] = useState<{ code: string } | null>(null);
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState<string>();
 
   const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(true);
@@ -54,8 +60,9 @@ export function LobbyScreen() {
   async function handleCreate() {
     setCreating(true);
     try {
-      const room = await createRoom(visibility);
+      const room = await createRoom(visibility, { password: createPassword.trim() || undefined });
       setCreateOpen(false);
+      setCreatePassword("");
       toast({ title: "Room created", description: `Share code ${room.code} to invite people.`, tone: "success" });
       enterRoom(room);
     } catch (err) {
@@ -66,7 +73,7 @@ export function LobbyScreen() {
     }
   }
 
-  async function handleJoin(code: string) {
+  async function handleJoin(code: string, password?: string) {
     const clean = code.trim().toUpperCase();
     if (clean.length < 4) {
       setJoinError("Enter a valid room code");
@@ -75,13 +82,21 @@ export function LobbyScreen() {
     setJoinError(undefined);
     setJoining(true);
     try {
-      const room = await joinRoom(clean);
+      const room = await joinRoom(clean, password);
+      setPwPrompt(null);
+      setPwInput("");
       toast({ title: `Joined ${room.code}`, tone: "success" });
       enterRoom(room);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Could not join the room.";
-      if (err instanceof ApiError && err.status === 404) setJoinError("No room with that code");
-      else toast({ title: "Join failed", description: message, tone: "danger" });
+      if (err instanceof ApiError && err.status === 401) {
+        // Room needs a password → open the prompt (or flag a wrong password).
+        if (pwPrompt) setPwError("Wrong password");
+        else setPwPrompt({ code: clean });
+      } else if (err instanceof ApiError && err.status === 404) {
+        setJoinError("No room with that code");
+      } else {
+        toast({ title: "Join failed", description: err instanceof ApiError ? err.message : "", tone: "danger" });
+      }
     } finally {
       setJoining(false);
     }
@@ -244,6 +259,61 @@ export function LobbyScreen() {
             );
           })}
         </div>
+        <div className="mt-4">
+          <Input
+            label="Password (optional)"
+            type="password"
+            placeholder="Leave blank for no password"
+            value={createPassword}
+            onChange={(e) => setCreatePassword(e.target.value)}
+          />
+        </div>
+      </Modal>
+
+      {/* Join password prompt */}
+      <Modal
+        open={pwPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPwPrompt(null);
+            setPwInput("");
+            setPwError(undefined);
+          }
+        }}
+        icon={LockIcon}
+        tone="brand"
+        title="This room is password-protected"
+        description={`Enter the password to join ${pwPrompt?.code ?? ""}.`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => { setPwPrompt(null); setPwInput(""); setPwError(undefined); }}>
+              Cancel
+            </Button>
+            <Button variant="gradient" disabled={joining} onClick={() => pwPrompt && handleJoin(pwPrompt.code, pwInput)}>
+              {joining ? "Joining…" : "Join"}
+            </Button>
+          </>
+        }
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pwPrompt) handleJoin(pwPrompt.code, pwInput);
+          }}
+        >
+          <Input
+            label="Room password"
+            type="password"
+            placeholder="••••••••"
+            value={pwInput}
+            onChange={(e) => {
+              setPwInput(e.target.value);
+              setPwError(undefined);
+            }}
+            error={pwError}
+            autoFocus
+          />
+        </form>
       </Modal>
     </div>
   );

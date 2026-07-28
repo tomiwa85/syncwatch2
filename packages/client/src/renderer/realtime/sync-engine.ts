@@ -12,6 +12,8 @@ export interface PlayerHandle {
   pause(): void;
   seek(time: number): void;
   getCurrentTime(): number;
+  /** Per-user volume (0..1). Not synced across the room. */
+  setVolume?(volume: number): void;
 }
 
 export interface AuthoritativeState {

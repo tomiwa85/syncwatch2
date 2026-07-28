@@ -15,6 +15,7 @@ export const StreamingVideoPlayer = forwardRef<PlayerHandle, StreamingVideoPlaye
   ({ url, onTime, onDuration }, ref) => {
     const playerRef = useRef<ReactPlayer>(null);
     const [playing, setPlaying] = useState(false);
+    const [volume, setVolume] = useState(1);
 
     useImperativeHandle(
       ref,
@@ -23,6 +24,7 @@ export const StreamingVideoPlayer = forwardRef<PlayerHandle, StreamingVideoPlaye
         pause: () => setPlaying(false),
         seek: (time: number) => playerRef.current?.seekTo(time, "seconds"),
         getCurrentTime: () => playerRef.current?.getCurrentTime() ?? 0,
+        setVolume: (v: number) => setVolume(v),
       }),
       [],
     );
@@ -32,6 +34,7 @@ export const StreamingVideoPlayer = forwardRef<PlayerHandle, StreamingVideoPlaye
         ref={playerRef}
         url={url}
         playing={playing}
+        volume={volume}
         controls={false}
         width="100%"
         height="100%"

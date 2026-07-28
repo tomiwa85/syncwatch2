@@ -12,6 +12,11 @@ files:
   - out/**
   - package.json
 
+# The bundled ffmpeg converter is copied into the app's resources dir.
+extraResources:
+  - from: resources/ffmpeg
+    to: ffmpeg
+
 asar: true
 
 win:

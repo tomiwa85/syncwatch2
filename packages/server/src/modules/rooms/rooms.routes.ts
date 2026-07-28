@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createRoomRequestSchema } from "@syncwatch/shared";
+import { createRoomRequestSchema, joinRoomRequestSchema } from "@syncwatch/shared";
 import { RoomError, createRoom, getRoomByCode, joinRoom, listPublicRooms } from "./rooms.service.js";
 
 export async function roomRoutes(app: FastifyInstance) {
@@ -8,7 +8,10 @@ export async function roomRoutes(app: FastifyInstance) {
 
   app.post("/api/rooms", async (request, reply) => {
     const body = createRoomRequestSchema.parse(request.body);
-    const room = await createRoom(request.userId!, body.visibility);
+    const room = await createRoom(request.userId!, body.visibility, {
+      playbackControl: body.playbackControl,
+      password: body.password,
+    });
     return reply.code(201).send({ room });
   });
 
@@ -32,8 +35,9 @@ export async function roomRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { code: string } }>("/api/rooms/:code/join", async (request, reply) => {
+    const body = joinRoomRequestSchema.parse(request.body ?? {});
     try {
-      const room = await joinRoom(request.userId!, request.params.code.toUpperCase());
+      const room = await joinRoom(request.userId!, request.params.code.toUpperCase(), body.password);
       return reply.send({ room });
     } catch (err) {
       if (err instanceof RoomError) return reply.code(err.status).send({ message: err.message });

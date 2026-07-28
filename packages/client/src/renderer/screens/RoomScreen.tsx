@@ -18,11 +18,15 @@ import {
   LinkIcon,
   CheckCircleIcon,
   AlertIcon,
+  CaptionsIcon,
 } from "../design-system/icons.js";
 import { LocalVideoPlayer } from "../components/LocalVideoPlayer.js";
 import { StreamingVideoPlayer } from "../components/StreamingVideoPlayer.js";
+import { PlayerStage } from "../components/PlayerStage.js";
+import { ChatPanel } from "../components/ChatPanel.js";
 import type { PlayerHandle } from "../realtime/sync-engine.js";
-import { pickVideo, type PickedVideo } from "../realtime/pickVideo.js";
+import { pickVideo, prepareForPlayback, type PickedVideo } from "../realtime/pickVideo.js";
+import { pickSubtitle } from "../realtime/subtitles.js";
 import { disconnectSocket } from "../realtime/socket-client.js";
 import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
@@ -68,6 +72,7 @@ export function RoomScreen() {
   const [duration, setDuration] = useState(0);
   const [urlInput, setUrlInput] = useState("");
   const [changing, setChanging] = useState(false);
+  const [preparing, setPreparing] = useState(false);
 
   const sig = sourceSig(room?.source ?? null);
 
@@ -82,7 +87,20 @@ export function RoomScreen() {
   useEffect(() => {
     sync.engine.setPlayer(hasPlayer ? playerRef.current : null);
     return () => sync.engine.setPlayer(null);
-  }, [hasPlayer, source?.sourceType, isStreaming ? source?.url : myVideo?.playbackUrl, sync.engine]);
+  }, [hasPlayer, source?.sourceType, isStreaming ? source?.url : myVideo?.forSig, sync.engine]);
+
+  // Pop-up notification for incoming chat messages from other people.
+  const seenChat = useRef(0);
+  useEffect(() => {
+    const msgs = sync.messages;
+    if (msgs.length > seenChat.current) {
+      const newest = msgs[msgs.length - 1];
+      if (seenChat.current > 0 && newest.userId !== userId) {
+        toast({ title: newest.displayName, description: newest.text, tone: "neutral" });
+      }
+      seenChat.current = msgs.length;
+    }
+  }, [sync.messages, userId, toast]);
 
   if (!room) {
     leaveRoom();
@@ -93,14 +111,31 @@ export function RoomScreen() {
   const me = room.members.find((m) => m.userId === userId);
   const isLocal = source?.sourceType === "LOCAL_FILE";
   const showChooser = isHost && (!source || changing);
+  const canControl = room.playbackControl === "EVERYONE" || isHost;
+
+  async function handlePickSubtitle() {
+    const sub = await pickSubtitle();
+    if (sub) {
+      sync.setSubtitle(sub.fileName, sub.vtt);
+      toast({ title: "Subtitles added", description: sub.fileName, tone: "success" });
+    }
+  }
 
   async function handleChooseFile() {
     const picked = await pickVideo();
     if (!picked) return;
-    setMyVideo({ ...picked, forSig: `LF:${picked.fileName}:${picked.fileSize}` });
-    sync.setSource({ sourceType: "LOCAL_FILE", fileName: picked.fileName, fileSize: picked.fileSize });
     setChanging(false);
-    toast({ title: "Video set", description: picked.fileName, tone: "success" });
+    setPreparing(true);
+    try {
+      const playbackUrl = await prepareForPlayback(picked);
+      setMyVideo({ ...picked, playbackUrl, forSig: `LF:${picked.fileName}:${picked.fileSize}` });
+      sync.setSource({ sourceType: "LOCAL_FILE", fileName: picked.fileName, fileSize: picked.fileSize });
+      toast({ title: "Video set", description: picked.fileName, tone: "success" });
+    } catch (e) {
+      toast({ title: "Couldn't prepare that video", description: e instanceof Error ? e.message : "", tone: "danger" });
+    } finally {
+      setPreparing(false);
+    }
   }
 
   function handleSetUrl() {
@@ -118,8 +153,16 @@ export function RoomScreen() {
   async function handleSelectCopy() {
     const picked = await pickVideo();
     if (!picked || !source || source.sourceType !== "LOCAL_FILE") return;
-    setMyVideo({ ...picked, forSig: sig });
-    sync.verifyFile(picked.fileName, picked.fileSize);
+    setPreparing(true);
+    try {
+      const playbackUrl = await prepareForPlayback(picked);
+      setMyVideo({ ...picked, playbackUrl, forSig: sig });
+      sync.verifyFile(picked.fileName, picked.fileSize);
+    } catch (e) {
+      toast({ title: "Couldn't prepare that video", description: e instanceof Error ? e.message : "", tone: "danger" });
+    } finally {
+      setPreparing(false);
+    }
   }
 
   async function handleLeave() {
@@ -143,33 +186,20 @@ export function RoomScreen() {
     toast({ title: "Room code copied", tone: "success" });
   }
 
-  const controls = (
-    <Card className="flex items-center gap-4 py-3">
-      <Button
-        variant="gradient"
-        size="sm"
-        onClick={() => (sync.playback.isPlaying ? sync.engine.userPause() : sync.engine.userPlay())}
-      >
-        {sync.playback.isPlaying ? "Pause" : "Play"}
-      </Button>
-      <span className="font-mono text-sm tabular-nums text-muted">
-        {formatTime(currentTime)} / {formatTime(duration)}
-      </span>
-      <input
-        type="range"
-        min={0}
-        max={duration || 0}
-        step={0.1}
-        value={Math.min(currentTime, duration || 0)}
-        onChange={(e) => {
-          const t = Number(e.target.value);
-          setCurrentTime(t);
-          sync.engine.userSeek(t);
-        }}
-        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-border accent-[color:var(--sw-accent)]"
-      />
-    </Card>
-  );
+  const togglePlay = () => (sync.playback.isPlaying ? sync.engine.userPause() : sync.engine.userPlay());
+  const stageProps = {
+    title: room.title,
+    isPlaying: sync.playback.isPlaying,
+    currentTime,
+    duration,
+    canControl,
+    onPlayPause: togglePlay,
+    onSeek: (t: number) => {
+      setCurrentTime(t);
+      sync.engine.userSeek(t);
+    },
+    onVolume: (v: number) => playerRef.current?.setVolume?.(v),
+  };
 
   return (
     <div className="min-h-full">
@@ -204,7 +234,15 @@ export function RoomScreen() {
             </Button>
           </div>
 
-          {showChooser ? (
+          {preparing ? (
+            <Card className="flex aspect-video flex-col items-center justify-center gap-4 border-dashed bg-bg-2 text-center">
+              <span className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent" />
+              <div>
+                <p className="font-medium">Preparing video…</p>
+                <p className="text-sm text-muted">Getting your file ready to play. This is quick for most videos.</p>
+              </div>
+            </Card>
+          ) : showChooser ? (
             <Card className="flex flex-col gap-5 p-8">
               <div className="flex flex-col items-center gap-3 text-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft text-accent">
@@ -252,17 +290,20 @@ export function RoomScreen() {
               )}
             </Card>
           ) : isStreaming ? (
-            <div className="flex flex-col gap-3">
-              <div className="aspect-video overflow-hidden rounded-sw bg-black">
-                <StreamingVideoPlayer ref={playerRef} url={source.url} onTime={setCurrentTime} onDuration={setDuration} />
-              </div>
-              {controls}
-            </div>
+            <PlayerStage {...stageProps}>
+              <StreamingVideoPlayer ref={playerRef} url={source.url} onTime={setCurrentTime} onDuration={setDuration} />
+            </PlayerStage>
           ) : isLocal && myVideo ? (
             <div className="flex flex-col gap-3">
-              <div className="aspect-video overflow-hidden rounded-sw">
-                <LocalVideoPlayer ref={playerRef} src={myVideo.playbackUrl} onTime={setCurrentTime} onDuration={setDuration} />
-              </div>
+              <PlayerStage {...stageProps}>
+                <LocalVideoPlayer
+                  ref={playerRef}
+                  src={myVideo.playbackUrl}
+                  subtitleVtt={sync.subtitle?.vtt ?? null}
+                  onTime={setCurrentTime}
+                  onDuration={setDuration}
+                />
+              </PlayerStage>
               {!isHost &&
                 (me?.fileVerified ? (
                   <div className="flex items-center gap-2 text-sm text-success">
@@ -273,7 +314,6 @@ export function RoomScreen() {
                     <AlertIcon size={16} /> Your file's name or size doesn't match the host's. You may be out of sync.
                   </div>
                 ))}
-              {controls}
             </div>
           ) : isLocal && !myVideo ? (
             <Card className="flex aspect-video flex-col items-center justify-center gap-4 border-dashed bg-bg-2 text-center">
@@ -302,14 +342,60 @@ export function RoomScreen() {
             </Card>
           )}
 
-          {isHost && source && !changing && (
-            <button onClick={() => setChanging(true)} className="self-start text-sm text-muted hover:text-accent">
-              Change video…
-            </button>
+          {isHost && source && !changing && !preparing && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setChanging(true)}>
+                <FilmIcon size={16} /> Change video
+              </Button>
+              {isLocal && myVideo && (
+                <Button variant="secondary" size="sm" onClick={handlePickSubtitle}>
+                  <CaptionsIcon size={16} /> {sync.subtitle ? "Change subtitles" : "Add subtitles"}
+                </Button>
+              )}
+              {isLocal && myVideo && sync.subtitle && (
+                <Button variant="ghost" size="sm" onClick={() => sync.clearSubtitle()}>
+                  Remove subtitles
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
         <aside className="flex flex-col gap-3">
+          {/* Host: who can control playback */}
+          {isHost && (
+            <Card className="flex flex-col gap-2 py-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Playback control</h2>
+              <div className="grid grid-cols-2 gap-1 rounded-sw bg-bg-2 p-1">
+                {(
+                  [
+                    { value: "EVERYONE", label: "Everyone" },
+                    { value: "HOST", label: "Only me" },
+                  ] as const
+                ).map((opt) => {
+                  const active = room.playbackControl === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => sync.setControl(opt.value)}
+                      className={
+                        "h-8 rounded-[9px] text-sm font-medium transition-all " +
+                        (active ? "bg-surface-raised text-text shadow-sm" : "text-muted hover:text-text")
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+          {!isHost && room.playbackControl === "HOST" && (
+            <Card className="flex items-center gap-2 py-3 text-sm text-muted">
+              <LockIcon size={16} /> The host controls playback in this room.
+            </Card>
+          )}
+
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted">
             <UsersIcon size={16} /> In this room · {room.members.length}
           </h2>
@@ -335,6 +421,8 @@ export function RoomScreen() {
               </div>
             ))}
           </Card>
+
+          <ChatPanel messages={sync.messages} myUserId={userId} onSend={sync.sendChat} />
         </aside>
       </main>
     </div>

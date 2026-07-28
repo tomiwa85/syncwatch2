@@ -7,7 +7,16 @@ export interface PickedVideo {
   fileName: string;
   fileSize: number;
   playbackUrl: string;
+  /** Absolute filesystem path — used by the mpv player (Electron only). */
+  filePath?: string;
 }
+
+// mpv plays essentially everything; this list just makes the "Video" filter
+// convenient. "All Files" is always available.
+const VIDEO_EXTENSIONS = [
+  "mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv", "flv", "mpg", "mpeg",
+  "ts", "m2ts", "mts", "vob", "ogv", "ogm", "3gp", "divx", "f4v", "rmvb", "asf",
+];
 
 export function registerFileDialogHandlers() {
   ipcMain.handle("dialog:pick-video", async (): Promise<PickedVideo | null> => {
@@ -15,7 +24,7 @@ export function registerFileDialogHandlers() {
       title: "Choose a video file",
       properties: ["openFile"],
       filters: [
-        { name: "Video", extensions: ["mp4", "mkv", "webm", "mov", "avi", "m4v"] },
+        { name: "Video", extensions: VIDEO_EXTENSIONS },
         { name: "All Files", extensions: ["*"] },
       ],
     });
@@ -30,6 +39,7 @@ export function registerFileDialogHandlers() {
       fileName: basename(filePath),
       fileSize: info.size,
       playbackUrl: `${LOCAL_VIDEO_SCHEME}://local/video`,
+      filePath,
     };
   });
 }

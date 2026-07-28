@@ -14,6 +14,9 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, "src/preload/index.ts") },
+        // Emit CommonJS (.cjs) — the most compatible format for an Electron
+        // preload script (avoids the ESM-preload pitfalls under type:module).
+        output: { format: "cjs", entryFileNames: "[name].cjs" },
       },
     },
   },

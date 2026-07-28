@@ -8,10 +8,15 @@ import {
   type RoomMemberLeftPayload,
   type RoomStatePayload,
   type VideoSource,
+  type VideoSourceChangedPayload,
+  type ChatMessagePayload,
+  type SubtitleChangedPayload,
+  type PlaybackControl,
 } from "@syncwatch/shared";
 import { connectSocket, getSocket } from "./socket-client.js";
 import { SyncEngine, type PlaybackIntent } from "./sync-engine.js";
 import { useNavStore } from "../state/nav.store.js";
+import { useAuthStore } from "../state/auth.store.js";
 import { useToast } from "../design-system/components/Toast.js";
 
 interface RoomSync {
@@ -19,8 +24,14 @@ interface RoomSync {
   playback: PlaybackState;
   liveTime: number;
   engine: SyncEngine;
+  messages: ChatMessagePayload[];
+  subtitle: SubtitleChangedPayload | null;
   setSource: (source: VideoSource) => void;
   verifyFile: (fileName: string, fileSize: number) => void;
+  setControl: (mode: PlaybackControl) => void;
+  sendChat: (text: string) => void;
+  setSubtitle: (fileName: string, vtt: string) => void;
+  clearSubtitle: () => void;
 }
 
 const initialPlayback: PlaybackState = {
@@ -36,6 +47,8 @@ export function useRoomSync(roomCode: string): RoomSync {
   const [connected, setConnected] = useState(false);
   const [playback, setPlayback] = useState<PlaybackState>(initialPlayback);
   const [liveTime, setLiveTime] = useState(0);
+  const [messages, setMessages] = useState<ChatMessagePayload[]>([]);
+  const [subtitle, setSubtitleState] = useState<SubtitleChangedPayload | null>(null);
   const playbackRef = useRef(playback);
   playbackRef.current = playback;
 
@@ -116,6 +129,16 @@ export function useRoomSync(roomCode: string): RoomSync {
       toast({ title: "Left the room", description: payload?.message ?? "This room is no longer available.", tone: "danger" });
       leaveRoom();
     };
+    const onSourceChanged = (payload: VideoSourceChangedPayload) => {
+      const room = useNavStore.getState().currentRoom;
+      const myId = useAuthStore.getState().user?.id;
+      if (!room || !myId || room.hostId === myId) return; // the host already knows
+      const name = payload.source.sourceType === "LOCAL_FILE" ? payload.source.fileName : "a video link";
+      toast({ title: "The host changed the video", description: name, tone: "neutral" });
+    };
+    const onChat = (payload: ChatMessagePayload) => setMessages((prev) => [...prev, payload]);
+    const onSubtitleChanged = (payload: SubtitleChangedPayload) => setSubtitleState(payload);
+    const onSubtitleCleared = () => setSubtitleState(null);
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -125,6 +148,10 @@ export function useRoomSync(roomCode: string): RoomSync {
     socket.on(SocketEvents.RoomMemberLeft, onMemberLeft);
     socket.on(SocketEvents.FileVerifyResult, onVerifyResult);
     socket.on(SocketEvents.RoomEnded, onRoomEnded);
+    socket.on(SocketEvents.VideoSourceChanged, onSourceChanged);
+    socket.on(SocketEvents.ChatMessage, onChat);
+    socket.on(SocketEvents.SubtitleChanged, onSubtitleChanged);
+    socket.on(SocketEvents.SubtitleCleared, onSubtitleCleared);
     socket.on("room:error", onRoomError);
 
     if (socket.connected) onConnect();
@@ -139,9 +166,19 @@ export function useRoomSync(roomCode: string): RoomSync {
       socket.off(SocketEvents.RoomMemberLeft, onMemberLeft);
       socket.off(SocketEvents.FileVerifyResult, onVerifyResult);
       socket.off(SocketEvents.RoomEnded, onRoomEnded);
+      socket.off(SocketEvents.VideoSourceChanged, onSourceChanged);
+      socket.off(SocketEvents.ChatMessage, onChat);
+      socket.off(SocketEvents.SubtitleChanged, onSubtitleChanged);
+      socket.off(SocketEvents.SubtitleCleared, onSubtitleCleared);
       socket.off("room:error", onRoomError);
     };
   }, [roomCode, updateRoom, engine, leaveRoom, toast]);
+
+  // Reset chat + subtitles when switching rooms.
+  useEffect(() => {
+    setMessages([]);
+    setSubtitleState(null);
+  }, [roomCode]);
 
   // Live-projected authoritative time (for the readout when no player is mounted).
   useEffect(() => {
@@ -155,6 +192,12 @@ export function useRoomSync(roomCode: string): RoomSync {
 
   return {
     connected,
+    messages,
+    subtitle,
+    setControl: (mode) => getSocket().emit(SocketEvents.RoomSetControl, { roomCode, playbackControl: mode }),
+    sendChat: (text) => getSocket().emit(SocketEvents.ChatSend, { roomCode, text }),
+    setSubtitle: (fileName, vtt) => getSocket().emit(SocketEvents.SubtitleSet, { roomCode, fileName, vtt }),
+    clearSubtitle: () => getSocket().emit(SocketEvents.SubtitleClear, { roomCode }),
     playback,
     liveTime,
     engine,

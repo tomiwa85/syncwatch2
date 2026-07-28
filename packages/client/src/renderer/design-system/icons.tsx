@@ -120,6 +120,45 @@ export const PlayIcon = (p: IconProps) => (
   </Base>
 );
 
+export const PauseIcon = (p: IconProps) => (
+  <Base {...p} fill="currentColor" stroke="none">
+    <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+  </Base>
+);
+
+export const MaximizeIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+  </Base>
+);
+
+export const MinimizeIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
+  </Base>
+);
+
+export const VolumeIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+    <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" />
+  </Base>
+);
+
+export const VolumeMuteIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+    <path d="m22 9-6 6M16 9l6 6" />
+  </Base>
+);
+
+export const CaptionsIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M8 12h2M8 15h3M14 12h2M14 15h2" />
+  </Base>
+);
+
 export const LockIcon = (p: IconProps) => (
   <Base {...p}>
     <rect x="3" y="11" width="18" height="11" rx="2" />

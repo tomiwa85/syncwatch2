@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, protocol } from "electron";
 import { registerFileDialogHandlers } from "./ipc/file-dialog.js";
 import { registerLocalVideoProtocol, LOCAL_VIDEO_SCHEME } from "./protocol.js";
+import { registerVideoConvert } from "./video-convert.js";
 
 // Prefer a real PNG logo (drop your brand PNG at resources/icon.png). Falls
 // back to Electron's default if it isn't present yet.
@@ -33,7 +34,7 @@ function createWindow() {
     autoHideMenuBar: true,
     ...(icon ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -53,6 +54,7 @@ function createWindow() {
 app.whenReady().then(() => {
   registerLocalVideoProtocol();
   registerFileDialogHandlers();
+  registerVideoConvert();
   createWindow();
 
   app.on("activate", () => {

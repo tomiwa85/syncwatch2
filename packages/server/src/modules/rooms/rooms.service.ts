@@ -1,5 +1,6 @@
+import argon2 from "argon2";
 import type { Prisma, Room, RoomMember, User } from "@prisma/client";
-import type { RoomSummary, RoomVisibility, VideoSource, WatchHistoryEntry } from "@syncwatch/shared";
+import type { PlaybackControl, RoomSummary, RoomVisibility, VideoSource, WatchHistoryEntry } from "@syncwatch/shared";
 import { prisma } from "../../db/prisma.js";
 
 export class RoomError extends Error {
@@ -47,6 +48,8 @@ export function toRoomSummary(room: RoomWithMembers): RoomSummary {
     code: room.code,
     title: room.title,
     visibility: room.visibility as RoomVisibility,
+    playbackControl: room.playbackControl as PlaybackControl,
+    hasPassword: room.passwordHash != null,
     hostId: room.hostId,
     source: sourceOf(room),
     members: room.members.map((m) => ({
@@ -62,18 +65,39 @@ const includeMembers = {
   members: { include: { user: true }, orderBy: { joinedAt: "asc" } },
 } satisfies Prisma.RoomInclude;
 
-export async function createRoom(userId: string, visibility: RoomVisibility): Promise<RoomSummary> {
+export async function createRoom(
+  userId: string,
+  visibility: RoomVisibility,
+  opts: { playbackControl?: PlaybackControl; password?: string } = {},
+): Promise<RoomSummary> {
   const code = await generateUniqueCode();
+  const passwordHash = opts.password ? await argon2.hash(opts.password, { type: argon2.argon2id }) : null;
   const room = await prisma.room.create({
     data: {
       code,
       hostId: userId,
       visibility,
+      playbackControl: opts.playbackControl ?? "EVERYONE",
+      passwordHash,
       members: { create: { userId, role: "host" } },
     },
     include: includeMembers,
   });
   return toRoomSummary(room);
+}
+
+/** Host-only playback-control mode of a room (for socket enforcement). */
+export async function getRoomControl(code: string): Promise<{ hostId: string; playbackControl: PlaybackControl } | null> {
+  const room = await prisma.room.findUnique({ where: { code }, select: { hostId: true, playbackControl: true } });
+  return room ? { hostId: room.hostId, playbackControl: room.playbackControl as PlaybackControl } : null;
+}
+
+export async function setPlaybackControl(userId: string, code: string, mode: PlaybackControl): Promise<RoomSummary> {
+  const room = await prisma.room.findUnique({ where: { code } });
+  if (!room) throw new RoomError("Room not found", 404);
+  if (room.hostId !== userId) throw new RoomError("Only the host can change this", 403);
+  await prisma.room.update({ where: { code }, data: { playbackControl: mode } });
+  return getRoomByCode(code);
 }
 
 export async function getRoomByCode(code: string): Promise<RoomSummary> {
@@ -82,10 +106,20 @@ export async function getRoomByCode(code: string): Promise<RoomSummary> {
   return toRoomSummary(room);
 }
 
-export async function joinRoom(userId: string, code: string): Promise<RoomSummary> {
-  const room = await prisma.room.findUnique({ where: { code } });
+export async function joinRoom(userId: string, code: string, password?: string): Promise<RoomSummary> {
+  const room = await prisma.room.findUnique({
+    where: { code },
+    include: { members: { where: { userId }, select: { id: true } } },
+  });
   if (!room) throw new RoomError("Room not found", 404);
   if (room.endedAt) throw new RoomError("This room has ended", 410);
+
+  // Password gate: required for non-host, non-member joiners of a protected room.
+  const alreadyMember = room.hostId === userId || room.members.length > 0;
+  if (room.passwordHash && !alreadyMember) {
+    const ok = password ? await argon2.verify(room.passwordHash, password) : false;
+    if (!ok) throw new RoomError("This room needs a password", 401);
+  }
 
   await prisma.roomMember.upsert({
     where: { roomId_userId: { roomId: room.id, userId } },

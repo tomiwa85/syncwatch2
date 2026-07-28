@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { playbackStateSchema, roomSummarySchema, videoSourceSchema } from "../models/room-state.js";
+import { playbackControlSchema, playbackStateSchema, roomSummarySchema, videoSourceSchema } from "../models/room-state.js";
 
 // client -> server
 
@@ -14,6 +14,29 @@ export const videoSetSourcePayloadSchema = z.object({
   source: videoSourceSchema,
 });
 export type VideoSetSourcePayload = z.infer<typeof videoSetSourcePayloadSchema>;
+
+export const roomSetControlPayloadSchema = z.object({
+  roomCode: z.string(),
+  playbackControl: playbackControlSchema,
+});
+export type RoomSetControlPayload = z.infer<typeof roomSetControlPayloadSchema>;
+
+export const chatSendPayloadSchema = z.object({
+  roomCode: z.string(),
+  text: z.string().min(1).max(1000),
+});
+export type ChatSendPayload = z.infer<typeof chatSendPayloadSchema>;
+
+export const subtitleSetPayloadSchema = z.object({
+  roomCode: z.string(),
+  fileName: z.string(),
+  /** WebVTT content (converted from .srt if needed). */
+  vtt: z.string().max(2_000_000),
+});
+export type SubtitleSetPayload = z.infer<typeof subtitleSetPayloadSchema>;
+
+export const subtitleClearPayloadSchema = z.object({ roomCode: z.string() });
+export type SubtitleClearPayload = z.infer<typeof subtitleClearPayloadSchema>;
 
 export const fileVerifyPayloadSchema = z.object({
   roomCode: z.string(),
@@ -79,3 +102,18 @@ export const playbackSyncPayloadSchema = z.object({
   origin: z.enum(["user", "heartbeat"]),
 });
 export type PlaybackSyncPayload = z.infer<typeof playbackSyncPayloadSchema>;
+
+export const chatMessagePayloadSchema = z.object({
+  id: z.string(),
+  userId: z.string().uuid(),
+  displayName: z.string(),
+  text: z.string(),
+  at: z.string().datetime(),
+});
+export type ChatMessagePayload = z.infer<typeof chatMessagePayloadSchema>;
+
+export const subtitleChangedPayloadSchema = z.object({
+  fileName: z.string(),
+  vtt: z.string(),
+});
+export type SubtitleChangedPayload = z.infer<typeof subtitleChangedPayloadSchema>;

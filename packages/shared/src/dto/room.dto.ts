@@ -1,10 +1,22 @@
 import { z } from "zod";
-import { roomVisibilitySchema, roomSummarySchema, watchHistoryEntrySchema } from "../models/room-state.js";
+import {
+  roomVisibilitySchema,
+  roomSummarySchema,
+  watchHistoryEntrySchema,
+  playbackControlSchema,
+} from "../models/room-state.js";
 
 export const createRoomRequestSchema = z.object({
   visibility: roomVisibilitySchema,
+  playbackControl: playbackControlSchema.optional(),
+  password: z.string().min(1).max(128).optional(),
 });
 export type CreateRoomRequest = z.infer<typeof createRoomRequestSchema>;
+
+export const joinRoomRequestSchema = z.object({
+  password: z.string().optional(),
+});
+export type JoinRoomRequest = z.infer<typeof joinRoomRequestSchema>;
 
 export const createRoomResponseSchema = z.object({
   room: roomSummarySchema,

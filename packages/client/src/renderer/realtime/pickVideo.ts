@@ -3,10 +3,13 @@ export interface PickedVideo {
   fileSize: number;
   /** URL the <video> element can load (sw-video:// in Electron, blob: in browser). */
   playbackUrl: string;
+  /** Absolute filesystem path (Electron only; absent in browser). */
+  filePath?: string;
 }
 
 interface SyncwatchBridge {
   pickVideoFile: () => Promise<PickedVideo | null>;
+  prepareVideo: (filePath: string) => Promise<{ playbackUrl: string }>;
 }
 
 function getBridge(): SyncwatchBridge | undefined {
@@ -18,13 +21,29 @@ export function hasNativePicker(): boolean {
   return typeof getBridge()?.pickVideoFile === "function";
 }
 
+/**
+ * Ensures a picked local file is playable, converting it (e.g. MKV/AVI) if the
+ * browser engine can't play it directly. Returns the final playback URL.
+ * Only meaningful in Electron; in the browser we just use the blob URL.
+ */
+export async function prepareForPlayback(picked: PickedVideo): Promise<string> {
+  const bridge = getBridge();
+  if (bridge?.prepareVideo && picked.filePath) {
+    const { playbackUrl } = await bridge.prepareVideo(picked.filePath);
+    return playbackUrl;
+  }
+  return picked.playbackUrl;
+}
+
 // Browser fallback: a hidden file input yields a real File (name + size) and a
 // blob URL for playback. Lets the app run — and be tested — outside Electron.
 function pickViaInput(): Promise<PickedVideo | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "video/*";
+    // `video/*` excludes .mkv (video/x-matroska) on many systems, so list
+    // common extensions explicitly too.
+    input.accept = "video/*,.mkv,.avi,.wmv,.flv,.mov,.m4v,.ts,.m2ts,.mpg,.mpeg,.webm,.mp4,.ogv,.3gp";
     input.style.display = "none";
     input.onchange = () => {
       const file = input.files?.[0];
