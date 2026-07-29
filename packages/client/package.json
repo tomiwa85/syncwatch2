@@ -12,9 +12,17 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "dist": "electron-vite build && electron-builder --win",
-    "dist:dir": "electron-vite build && electron-builder --win --dir"
+    "dist:dir": "electron-vite build && electron-builder --win --dir",
+    "build:web": "vite build --config vite.web.config.ts",
+    "cap:sync": "cap sync android",
+    "cap:add:android": "cap add android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
     "@syncwatch/shared": "workspace:*",
     "socket.io-client": "^4.8.0",
     "electron-builder": "^25.1.8",
