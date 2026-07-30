@@ -9,25 +9,37 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-      - uses: actions/setup-java@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: pnpm install --no-frozen-lockfile --filter "@syncwatch/client..."
+
       - name: Build web bundle
         run: pnpm --filter @syncwatch/client build:web
+
       - name: Generate Android project
         working-directory: packages/client
         run: |
@@ -35,11 +47,13 @@ jobs:
           npx cap sync android
           npx @capacitor/assets generate --android --iconBackgroundColor '#0B0F1A' --iconBackgroundColorDark '#0B0F1A' --splashBackgroundColor '#0B0F1A' --splashBackgroundColorDark '#0B0F1A' || echo "::warning::icon/splash generation skipped (using defaults)"
           node -e "const fs=require('fs');const p='android/app/src/main/AndroidManifest.xml';let x=fs.readFileSync(p,'utf8');if(!x.includes('android:screenOrientation')){x=x.replace(/<activity\b/, '<activity\n            android:screenOrientation=\"fullUser\"');fs.writeFileSync(p,x);console.log('rotation enabled')}" || echo "::warning::manifest rotation patch skipped"
+
       - name: Build debug APK
         working-directory: packages/client/android
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
