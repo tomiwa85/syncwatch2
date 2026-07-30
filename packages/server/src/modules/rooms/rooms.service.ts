@@ -194,7 +194,7 @@ export async function endRoomIfHost(userId: string, code: string): Promise<boole
 /** A user's watch history: ended rooms they were part of, newest first, with co-watchers. */
 export async function getUserHistory(userId: string): Promise<WatchHistoryEntry[]> {
   const memberships = await prisma.roomMember.findMany({
-    where: { userId, room: { endedAt: { not: null } } },
+    where: { userId, hiddenFromHistory: false, room: { endedAt: { not: null } } },
     include: { room: { include: { members: { include: { user: true } } } } },
     orderBy: { room: { endedAt: "desc" } },
     take: 100,
@@ -208,4 +208,12 @@ export async function getUserHistory(userId: string): Promise<WatchHistoryEntry[
       .filter((rm) => rm.userId !== userId)
       .map((rm) => ({ userId: rm.userId, displayName: rm.user.displayName })),
   }));
+}
+
+/** Hide one ended room from a user's history ("delete" from their view only). */
+export async function hideHistoryEntry(userId: string, code: string): Promise<void> {
+  await prisma.roomMember.updateMany({
+    where: { userId, room: { code, endedAt: { not: null } } },
+    data: { hiddenFromHistory: true },
+  });
 }

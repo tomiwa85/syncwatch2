@@ -4,6 +4,7 @@ export const SocketEvents = {
   RoomState: "room:state",
   RoomMemberJoined: "room:member-joined",
   RoomMemberLeft: "room:member-left",
+  RoomEnd: "room:end",
   RoomEnded: "room:ended",
 
   VideoSetSource: "video:set-source",

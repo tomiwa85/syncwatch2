@@ -9,6 +9,10 @@ export type RoomJoinPayload = z.infer<typeof roomJoinPayloadSchema>;
 export const roomLeavePayloadSchema = z.object({ roomCode: z.string() });
 export type RoomLeavePayload = z.infer<typeof roomLeavePayloadSchema>;
 
+// Host explicitly ends the room now (bypasses the disconnect grace period).
+export const roomEndPayloadSchema = z.object({ roomCode: z.string() });
+export type RoomEndPayload = z.infer<typeof roomEndPayloadSchema>;
+
 export const videoSetSourcePayloadSchema = z.object({
   roomCode: z.string(),
   source: videoSourceSchema,

@@ -7,6 +7,7 @@ import {
   fileVerifyPayloadSchema,
   playbackActionPayloadSchema,
   playbackSeekPayloadSchema,
+  roomEndPayloadSchema,
   roomJoinPayloadSchema,
   roomLeavePayloadSchema,
   roomSetControlPayloadSchema,
@@ -33,6 +34,22 @@ interface SocketData {
 }
 
 const HEARTBEAT_MS = 5000;
+
+// How long the room survives after the host's socket drops, so a brief network
+// blip doesn't kick everyone. If the host reconnects within this window the
+// pending end is cancelled.
+const HOST_GRACE_MS = 45000;
+
+// Rooms with a pending "end" timer (host disconnected, awaiting reconnect).
+const pendingRoomEnds = new Map<string, NodeJS.Timeout>();
+
+function cancelPendingEnd(code: string): void {
+  const timer = pendingRoomEnds.get(code);
+  if (timer) {
+    clearTimeout(timer);
+    pendingRoomEnds.delete(code);
+  }
+}
 
 // Whether a user may drive playback: always in EVERYONE mode, host-only in HOST mode.
 async function canControlPlayback(code: string, userId: string): Promise<boolean> {
@@ -73,12 +90,27 @@ export function attachSocketServer(httpServer: HttpServer): Server {
         const room = await joinRoom(userId, code);
         socket.join(code);
 
+        // If the host is (re)joining, cancel any pending end from a brief drop.
+        if (room.hostId === userId) cancelPendingEnd(code);
+
         const snapshot = await roomState.snapshot(code);
         socket.emit(SocketEvents.RoomState, { room, playback: toPlaybackState(snapshot) });
 
         socket.to(code).emit(SocketEvents.RoomMemberJoined, { userId, displayName });
       } catch {
         socket.emit("room:error", { message: "Could not join room" });
+      }
+    });
+
+    // Host explicitly ends the room now (their "End party" button) — skip grace.
+    socket.on(SocketEvents.RoomEnd, async (payload) => {
+      const parsed = roomEndPayloadSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const code = parsed.data.roomCode.toUpperCase();
+      cancelPendingEnd(code);
+      if (await endRoomIfHost(userId, code)) {
+        io.to(code).emit(SocketEvents.RoomEnded, { roomCode: code });
+        roomState.evict(code);
       }
     });
 
@@ -227,10 +259,25 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     socket.on("disconnecting", async () => {
       const codes = [...socket.rooms].filter((c) => c !== socket.id);
       for (const code of codes) {
-        socket.to(code).emit(SocketEvents.RoomMemberLeft, { userId });
-        if (await endRoomIfHost(userId, code)) {
-          io.to(code).emit(SocketEvents.RoomEnded, { roomCode: code });
-          roomState.evict(code);
+        const control = await getRoomControl(code);
+        const isHost = control?.hostId === userId;
+
+        if (isHost) {
+          // Don't kick everyone on a brief host drop. Start (or keep) a grace
+          // timer; a host reconnect within the window cancels it. The host is
+          // left in the member list meanwhile so others don't see them vanish.
+          if (!pendingRoomEnds.has(code)) {
+            const timer = setTimeout(async () => {
+              pendingRoomEnds.delete(code);
+              if (await endRoomIfHost(userId, code)) {
+                io.to(code).emit(SocketEvents.RoomEnded, { roomCode: code });
+                roomState.evict(code);
+              }
+            }, HOST_GRACE_MS);
+            pendingRoomEnds.set(code, timer);
+          }
+        } else {
+          socket.to(code).emit(SocketEvents.RoomMemberLeft, { userId });
         }
       }
     });

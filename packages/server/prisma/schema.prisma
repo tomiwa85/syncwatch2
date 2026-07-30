@@ -81,6 +81,10 @@ model RoomMember {
   localFileSize BigInt?
   fileVerified  Boolean @default(false)
 
+  // When set, this membership is hidden from the user's watch history (they
+  // "deleted" it). The row is kept so co-watchers' history stays intact.
+  hiddenFromHistory Boolean @default(false)
+
   joinedAt DateTime @default(now())
 
   @@unique([roomId, userId])
