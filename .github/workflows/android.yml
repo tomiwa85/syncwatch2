@@ -33,8 +33,8 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
-          npx capacitor-assets generate --android --iconBackgroundColor '#0B0F1A' --iconBackgroundColorDark '#0B0F1A' --splashBackgroundColor '#0B0F1A' --splashBackgroundColorDark '#0B0F1A' || echo "::warning::icon/splash generation skipped (using defaults)"
-          node scripts/patch-android.mjs
+          npx @capacitor/assets generate --android --iconBackgroundColor '#0B0F1A' --iconBackgroundColorDark '#0B0F1A' --splashBackgroundColor '#0B0F1A' --splashBackgroundColorDark '#0B0F1A' || echo "::warning::icon/splash generation skipped (using defaults)"
+          node -e "const fs=require('fs');const p='android/app/src/main/AndroidManifest.xml';let x=fs.readFileSync(p,'utf8');if(!x.includes('android:screenOrientation')){x=x.replace(/<activity\b/, '<activity\n            android:screenOrientation=\"fullUser\"');fs.writeFileSync(p,x);console.log('rotation enabled')}" || echo "::warning::manifest rotation patch skipped"
       - name: Build debug APK
         working-directory: packages/client/android
         run: |
