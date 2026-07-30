@@ -231,10 +231,11 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       try {
         const room = await getRoomByCode(code);
         const source = room.source;
+        // Match on file SIZE only: the same encode is a reliable match even when
+        // the two people named the file differently. (Byte-size collisions between
+        // genuinely different videos are effectively impossible.)
         const verified =
-          source?.sourceType === "LOCAL_FILE" &&
-          source.fileName === parsed.data.fileName &&
-          source.fileSize === parsed.data.fileSize;
+          source?.sourceType === "LOCAL_FILE" && source.fileSize === parsed.data.fileSize;
 
         await prisma.roomMember.updateMany({
           where: { room: { code }, userId },
@@ -248,7 +249,7 @@ export function attachSocketServer(httpServer: HttpServer): Server {
         io.to(code).emit(SocketEvents.FileVerifyResult, {
           userId,
           verified,
-          ...(verified ? {} : { reason: "File name or size does not match the room's file" }),
+          ...(verified ? {} : { reason: "File size does not match the room's file" }),
         });
       } catch {
         /* ignore */
