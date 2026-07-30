@@ -83,7 +83,19 @@ export function PlayerStage({
   const visible = active || !isPlaying || menuOpen;
 
   useEffect(() => {
-    const onFs = () => setFullscreen(document.fullscreenElement === stageRef.current);
+    const onFs = () => {
+      const fs = document.fullscreenElement === stageRef.current;
+      setFullscreen(fs);
+      // On mobile, rotate to landscape while fullscreen (and release on exit).
+      // No-ops/throws harmlessly on desktop — hence the try/catch.
+      try {
+        const orientation = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void } }).orientation;
+        if (fs) void orientation?.lock?.("landscape").catch(() => {});
+        else orientation?.unlock?.();
+      } catch {
+        /* orientation lock unsupported (desktop) */
+      }
+    };
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);

@@ -6,7 +6,7 @@ import { Badge } from "../design-system/components/Badge.js";
 import { Avatar } from "../design-system/components/Avatar.js";
 import { Input } from "../design-system/components/Input.js";
 import { useToast } from "../design-system/components/Toast.js";
-import { useConfirm } from "../design-system/useConfirm.js";
+import { Modal } from "../design-system/components/Modal.js";
 import {
   PlayIcon,
   GlobeIcon,
@@ -62,7 +62,6 @@ export function RoomScreen() {
   const leaveRoom = useNavStore((s) => s.leaveRoom);
   const userId = useAuthStore((s) => s.user?.id);
   const { toast } = useToast();
-  const confirm = useConfirm();
 
   const sync = useRoomSync(room?.code ?? "");
   const playerRef = useRef<PlayerHandle>(null);
@@ -72,6 +71,7 @@ export function RoomScreen() {
   const [urlInput, setUrlInput] = useState("");
   const [changing, setChanging] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
 
   const sig = sourceSig(room?.source ?? null);
 
@@ -165,19 +165,15 @@ export function RoomScreen() {
     }
   }
 
-  async function handleLeave() {
-    const ok = await confirm({
-      title: isHost ? "End this watch party?" : "Leave this room?",
-      description: isHost
-        ? "Leaving as the host ends the party for everyone."
-        : "You can rejoin anytime with the room code.",
-      confirmLabel: isHost ? "End party" : "Leave",
-      tone: "danger",
-    });
-    if (!ok) return;
-    // Host explicitly ends the room now (the server otherwise keeps it alive
-    // through a brief host disconnect so a network blip doesn't kick everyone).
-    if (isHost) sync.endRoom();
+  // Step out but keep the room alive (same as clicking the logo) — you can rejoin.
+  function leaveTemporarily() {
+    setLeaveOpen(false);
+    leaveRoom();
+  }
+  // Host only: end the room now for everyone.
+  function endPartyNow() {
+    setLeaveOpen(false);
+    sync.endRoom();
     leaveRoom();
   }
 
@@ -248,7 +244,7 @@ export function RoomScreen() {
                 {isHost && " (you)"}
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLeave}>
+            <Button variant="ghost" size="sm" onClick={() => setLeaveOpen(true)}>
               <LogOutIcon size={16} /> Leave
             </Button>
           </div>
@@ -324,13 +320,18 @@ export function RoomScreen() {
                 />
               </PlayerStage>
               {!isHost &&
-                (me?.fileVerified ? (
+                (sync.verifyPending ? (
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-border border-t-accent" />
+                    Checking your file against the host's…
+                  </div>
+                ) : me?.fileVerified ? (
                   <div className="flex items-center gap-2 text-sm text-success">
                     <CheckCircleIcon size={16} /> Your file matches the host — you're in sync.
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 rounded-sw border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
-                    <AlertIcon size={16} /> Your file's name or size doesn't match the host's. You may be out of sync.
+                    <AlertIcon size={16} /> Your file doesn't match the host's (different size). You can still watch, but may be out of sync.
                   </div>
                 ))}
             </div>
@@ -439,6 +440,35 @@ export function RoomScreen() {
           <ChatPanel messages={sync.messages} myUserId={userId} onSend={sync.sendChat} />
         </aside>
       </main>
+
+      {/* Leave options: step out (keep room alive) vs, for the host, end for everyone. */}
+      <Modal
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        icon={LogOutIcon}
+        tone="brand"
+        title={isHost ? "Leave this watch party?" : "Leave this room?"}
+        description={
+          isHost
+            ? "Step out and rejoin later, or end the party for everyone."
+            : "You can rejoin anytime with the room code."
+        }
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setLeaveOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="secondary" onClick={leaveTemporarily}>
+              Leave room
+            </Button>
+            {isHost && (
+              <Button variant="danger" onClick={endPartyNow}>
+                End party
+              </Button>
+            )}
+          </>
+        }
+      />
     </div>
   );
 }

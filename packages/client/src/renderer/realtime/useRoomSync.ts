@@ -24,6 +24,8 @@ interface RoomSync {
   playback: PlaybackState;
   liveTime: number;
   engine: SyncEngine;
+  /** True while this user's picked file is being checked against the host's. */
+  verifyPending: boolean;
   messages: ChatMessagePayload[];
   subtitle: SubtitleChangedPayload | null;
   setSource: (source: VideoSource) => void;
@@ -50,6 +52,7 @@ export function useRoomSync(roomCode: string): RoomSync {
   const [liveTime, setLiveTime] = useState(0);
   const [messages, setMessages] = useState<ChatMessagePayload[]>([]);
   const [subtitle, setSubtitleState] = useState<SubtitleChangedPayload | null>(null);
+  const [verifyPending, setVerifyPending] = useState(false);
   const playbackRef = useRef(playback);
   playbackRef.current = playback;
 
@@ -115,6 +118,7 @@ export function useRoomSync(roomCode: string): RoomSync {
       updateRoom({ ...room, members: room.members.filter((m) => m.userId !== payload.userId) });
     };
     const onVerifyResult = (payload: FileVerifyResultPayload) => {
+      if (payload.userId === useAuthStore.getState().user?.id) setVerifyPending(false);
       const room = useNavStore.getState().currentRoom;
       if (!room) return;
       updateRoom({
@@ -179,6 +183,7 @@ export function useRoomSync(roomCode: string): RoomSync {
   useEffect(() => {
     setMessages([]);
     setSubtitleState(null);
+    setVerifyPending(false);
   }, [roomCode]);
 
   // Live-projected authoritative time (for the readout when no player is mounted).
@@ -193,6 +198,7 @@ export function useRoomSync(roomCode: string): RoomSync {
 
   return {
     connected,
+    verifyPending,
     messages,
     subtitle,
     setControl: (mode) => getSocket().emit(SocketEvents.RoomSetControl, { roomCode, playbackControl: mode }),
@@ -204,6 +210,9 @@ export function useRoomSync(roomCode: string): RoomSync {
     liveTime,
     engine,
     setSource: (source) => getSocket().emit(SocketEvents.VideoSetSource, { roomCode, source }),
-    verifyFile: (fileName, fileSize) => getSocket().emit(SocketEvents.FileVerify, { roomCode, fileName, fileSize }),
+    verifyFile: (fileName, fileSize) => {
+      setVerifyPending(true);
+      getSocket().emit(SocketEvents.FileVerify, { roomCode, fileName, fileSize });
+    },
   };
 }
