@@ -12,7 +12,7 @@ export function getSocket(): Socket {
   if (socket) return socket;
   socket = io(getSocketUrl(), {
     autoConnect: false,
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
     auth: (cb) => cb({ token: useAuthStore.getState().accessToken ?? "" }),
   });
 
