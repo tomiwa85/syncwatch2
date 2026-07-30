@@ -44,3 +44,8 @@ export async function getHistory(): Promise<WatchHistoryEntry[]> {
   const res = await apiRequest<GetHistoryResponse>("/api/users/me/history");
   return res.entries;
 }
+
+/** Remove one item from the current user's watch history (their view only). */
+export async function deleteHistoryEntry(roomCode: string): Promise<void> {
+  await apiRequest<void>(`/api/users/me/history/${roomCode}`, { method: "DELETE" });
+}

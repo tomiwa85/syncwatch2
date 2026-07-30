@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { cn } from "../design-system/cn.js";
 import {
   PlayIcon,
@@ -7,7 +7,16 @@ import {
   MinimizeIcon,
   VolumeIcon,
   VolumeMuteIcon,
+  MoreIcon,
 } from "../design-system/icons.js";
+
+/** An item in the player's overflow (⋮) menu. */
+export interface PlayerMenuItem {
+  label: string;
+  icon?: ComponentType<{ size?: number }>;
+  onSelect: () => void;
+  tone?: "default" | "danger";
+}
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds)) return "0:00";
@@ -28,6 +37,8 @@ interface PlayerStageProps {
   onPlayPause: () => void;
   onSeek: (time: number) => void;
   onVolume?: (volume: number) => void;
+  /** Items for the overflow (⋮) menu — e.g. subtitle controls. Hidden if empty. */
+  menuItems?: PlayerMenuItem[];
   /** The actual player element (LocalVideoPlayer / StreamingVideoPlayer). */
   children: ReactNode;
 }
@@ -44,6 +55,7 @@ export function PlayerStage({
   onPlayPause,
   onSeek,
   onVolume,
+  menuItems,
   children,
 }: PlayerStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -51,6 +63,7 @@ export function PlayerStage({
   const [fullscreen, setFullscreen] = useState(false);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const hideTimer = useRef<number | null>(null);
 
   const show = useCallback(() => {
@@ -66,8 +79,8 @@ export function PlayerStage({
     };
   }, [show, title]);
 
-  // Controls always visible while paused.
-  const visible = active || !isPlaying;
+  // Controls stay visible while paused, or while the overflow menu is open.
+  const visible = active || !isPlaying || menuOpen;
 
   useEffect(() => {
     const onFs = () => setFullscreen(document.fullscreenElement === stageRef.current);
@@ -75,9 +88,35 @@ export function PlayerStage({
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  function toggleFullscreen() {
+  const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void stageRef.current?.requestFullscreen();
+  }, []);
+
+  // Spacebar toggles play/pause (standard media-player behavior), and only when
+  // the user isn't typing in an input (e.g. the chat box).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      const typing = el instanceof HTMLElement && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (typing) return;
+      if ((e.code === "Space" || e.key === " ") && canControl) {
+        e.preventDefault();
+        onPlayPause();
+        show();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canControl, onPlayPause, show]);
+
+  // A tap on the video reveals/hides the controls — it does NOT toggle playback
+  // (that's what the play button / spacebar / center button are for). Matches
+  // how VLC and mobile players behave, so a stray click can't pause the movie.
+  function onSurfaceClick() {
+    if (menuOpen) { setMenuOpen(false); return; }
+    if (visible && isPlaying) setActive(false);
+    else show();
   }
 
   function applyVolume(v: number) {
@@ -105,10 +144,10 @@ export function PlayerStage({
         !visible && "cursor-none",
       )}
       onMouseMove={show}
-      onMouseLeave={() => isPlaying && setActive(false)}
+      onMouseLeave={() => isPlaying && !menuOpen && setActive(false)}
     >
-      {/* video */}
-      <div className="absolute inset-0" onClick={() => canControl && onPlayPause()}>
+      {/* video — a tap toggles the controls, a double-click toggles fullscreen */}
+      <div className="absolute inset-0" onClick={onSurfaceClick} onDoubleClick={toggleFullscreen}>
         {children}
       </div>
 
@@ -181,6 +220,45 @@ export function PlayerStage({
           <div className="flex-1" />
 
           {!canControl && <span className="text-xs text-white/60">Host controls playback</span>}
+
+          {/* overflow (⋮) menu — subtitles etc. */}
+          {menuItems && menuItems.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((o) => !o)}
+                className={cn("transition hover:text-accent", menuOpen && "text-accent")}
+                aria-label="More options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <MoreIcon size={20} />
+              </button>
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute bottom-full right-0 mb-2 min-w-44 overflow-hidden rounded-sw border border-white/10 bg-black/90 py-1 text-sm text-white shadow-xl backdrop-blur"
+                >
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.label}
+                        role="menuitem"
+                        onClick={() => { setMenuOpen(false); item.onSelect(); }}
+                        className={cn(
+                          "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/10",
+                          item.tone === "danger" ? "text-red-400" : "text-white/90",
+                        )}
+                      >
+                        {Icon && <Icon size={16} />}
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <button onClick={toggleFullscreen} className="transition hover:text-accent" aria-label="Fullscreen">
             {fullscreen ? <MinimizeIcon size={20} /> : <MaximizeIcon size={20} />}

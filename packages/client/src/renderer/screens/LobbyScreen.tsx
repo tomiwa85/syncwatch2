@@ -19,7 +19,16 @@ import { ApiError } from "../api/http.js";
 import { createRoom, getRoom, joinRoom, listPublicRooms } from "../api/rooms.api.js";
 import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
+import { Tour, type TourStep } from "../components/Tour.js";
 import { TopBar } from "./TopBar.js";
+
+const TOUR_KEY = "syncwatch-tour-lobby-v1";
+const TOUR_STEPS: TourStep[] = [
+  { title: "Welcome to SyncWatch 👋", body: "Watch movies and videos in perfect sync with friends. Here's a 20-second tour." },
+  { targetId: "tour-create", title: "Create a room", body: "Host a watch party — public or private, with an optional password. You pick the video and everyone stays in sync." },
+  { targetId: "tour-join", title: "Join with a code", body: "Got a room code from a friend? Enter it here to jump straight in." },
+  { targetId: "tour-search", title: "Find rooms", body: "Browse public rooms, or paste an exact room ID to find a private one." },
+];
 
 export function LobbyScreen() {
   const user = useAuthStore((s) => s.user);
@@ -42,6 +51,18 @@ export function LobbyScreen() {
 
   const [publicRooms, setPublicRooms] = useState<RoomSummary[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(true);
+
+  // First-run guided tour (after the splash), shown once.
+  const [showTour, setShowTour] = useState(false);
+  useEffect(() => {
+    if (localStorage.getItem(TOUR_KEY)) return;
+    const t = window.setTimeout(() => setShowTour(true), 2100);
+    return () => window.clearTimeout(t);
+  }, []);
+  function finishTour() {
+    localStorage.setItem(TOUR_KEY, "1");
+    setShowTour(false);
+  }
 
   // Search: live-filters the public list, and looks up an exact code (so a
   // private room surfaces only when its full code is typed — never browsable).
@@ -187,7 +208,7 @@ export function LobbyScreen() {
     <div className="min-h-full">
       <TopBar />
 
-      <main className="mx-auto max-w-4xl px-8 py-12">
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-12">
         <h1 className="text-2xl font-bold">
           Welcome back, <span className="bg-brand bg-clip-text text-transparent">{user?.displayName}</span>
         </h1>
@@ -195,7 +216,7 @@ export function LobbyScreen() {
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Create */}
-          <Card className="flex flex-col gap-3">
+          <Card id="tour-create" className="flex flex-col gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-sw bg-brand-soft text-accent">
               <PlusIcon size={22} />
             </span>
@@ -209,7 +230,7 @@ export function LobbyScreen() {
           </Card>
 
           {/* Join */}
-          <Card className="flex flex-col gap-3">
+          <Card id="tour-join" className="flex flex-col gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-sw bg-brand-soft text-accent">
               <UsersIcon size={22} />
             </span>
@@ -253,7 +274,7 @@ export function LobbyScreen() {
           </div>
 
           {/* Search: filters public rooms live; a private room appears only on an exact code match. */}
-          <div className="relative mb-3">
+          <div id="tour-search" className="relative mb-3">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
               <SearchIcon size={16} />
             </span>
@@ -387,6 +408,8 @@ export function LobbyScreen() {
           />
         </form>
       </Modal>
+
+      {showTour && <Tour steps={TOUR_STEPS} onDone={finishTour} />}
     </div>
   );
 }

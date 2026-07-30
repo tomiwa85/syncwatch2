@@ -7,3 +7,4 @@ allowBuilds:
   electron: true
   esbuild: true
   prisma: true
+  sharp: true

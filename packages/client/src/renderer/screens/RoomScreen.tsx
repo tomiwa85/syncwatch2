@@ -22,12 +22,11 @@ import {
 } from "../design-system/icons.js";
 import { LocalVideoPlayer } from "../components/LocalVideoPlayer.js";
 import { StreamingVideoPlayer } from "../components/StreamingVideoPlayer.js";
-import { PlayerStage } from "../components/PlayerStage.js";
+import { PlayerStage, type PlayerMenuItem } from "../components/PlayerStage.js";
 import { ChatPanel } from "../components/ChatPanel.js";
 import type { PlayerHandle } from "../realtime/sync-engine.js";
 import { pickVideo, prepareForPlayback, type PickedVideo } from "../realtime/pickVideo.js";
 import { pickSubtitle } from "../realtime/subtitles.js";
-import { disconnectSocket } from "../realtime/socket-client.js";
 import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
 import { useRoomSync } from "../realtime/useRoomSync.js";
@@ -109,6 +108,7 @@ export function RoomScreen() {
 
   const isHost = room.hostId === userId;
   const me = room.members.find((m) => m.userId === userId);
+  const hostName = room.members.find((m) => m.role === "host")?.displayName ?? "the host";
   const isLocal = source?.sourceType === "LOCAL_FILE";
   const showChooser = isHost && (!source || changing);
   const canControl = room.playbackControl === "EVERYONE" || isHost;
@@ -175,9 +175,9 @@ export function RoomScreen() {
       tone: "danger",
     });
     if (!ok) return;
-    // Host leaving ends the room: disconnecting triggers the server's
-    // disconnect handler, which sets endedAt and notifies everyone.
-    if (isHost) disconnectSocket();
+    // Host explicitly ends the room now (the server otherwise keeps it alive
+    // through a brief host disconnect so a network blip doesn't kick everyone).
+    if (isHost) sync.endRoom();
     leaveRoom();
   }
 
@@ -187,6 +187,18 @@ export function RoomScreen() {
   }
 
   const togglePlay = () => (sync.playback.isPlaying ? sync.engine.userPause() : sync.engine.userPlay());
+
+  // Overflow (⋮) menu on the player — subtitle controls (host, local video).
+  const playerMenuItems: PlayerMenuItem[] | undefined =
+    isHost && isLocal && myVideo
+      ? [
+          { label: sync.subtitle ? "Change subtitles" : "Add subtitles", icon: CaptionsIcon, onSelect: handlePickSubtitle },
+          ...(sync.subtitle
+            ? [{ label: "Remove subtitles", icon: CaptionsIcon, onSelect: () => sync.clearSubtitle(), tone: "danger" as const }]
+            : []),
+        ]
+      : undefined;
+
   const stageProps = {
     title: room.title,
     isPlaying: sync.playback.isPlaying,
@@ -199,35 +211,42 @@ export function RoomScreen() {
       sync.engine.userSeek(t);
     },
     onVolume: (v: number) => playerRef.current?.setVolume?.(v),
+    menuItems: playerMenuItems,
   };
 
   return (
     <div className="min-h-full">
       <TopBar />
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-8 py-8 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={copyCode}
-                className="group flex items-center gap-2 rounded-sw border border-border bg-surface px-3 py-1.5 transition-colors hover:border-border-strong"
-                title="Copy room code"
-              >
-                <span className="text-lg font-semibold tracking-widest">{room.code}</span>
-                <CopyIcon size={15} />
-              </button>
-              {room.visibility === "PUBLIC" ? (
-                <Badge tone="accent">
-                  <GlobeIcon size={12} /> Public
-                </Badge>
-              ) : (
-                <Badge>
-                  <LockIcon size={12} /> Private
-                </Badge>
-              )}
-              {isHost && <Badge tone="success">Host</Badge>}
-              <Badge tone={sync.connected ? "success" : "neutral"}>{sync.connected ? "Live" : "Connecting…"}</Badge>
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-8 sm:py-8 lg:grid-cols-[1fr_320px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={copyCode}
+                  className="group flex items-center gap-2 rounded-sw border border-border bg-surface px-3 py-1.5 transition-colors hover:border-border-strong"
+                  title="Copy room code"
+                >
+                  <span className="text-lg font-semibold tracking-widest">{room.code}</span>
+                  <CopyIcon size={15} />
+                </button>
+                {room.visibility === "PUBLIC" ? (
+                  <Badge tone="accent">
+                    <GlobeIcon size={12} /> Public
+                  </Badge>
+                ) : (
+                  <Badge>
+                    <LockIcon size={12} /> Private
+                  </Badge>
+                )}
+                {isHost && <Badge tone="success">Host</Badge>}
+                <Badge tone={sync.connected ? "success" : "neutral"}>{sync.connected ? "Live" : "Connecting…"}</Badge>
+              </div>
+              <p className="text-xs text-muted">
+                Created by <span className="font-medium text-text">{hostName}</span>
+                {isHost && " (you)"}
+              </p>
             </div>
             <Button variant="ghost" size="sm" onClick={handleLeave}>
               <LogOutIcon size={16} /> Leave
@@ -348,14 +367,9 @@ export function RoomScreen() {
                 <FilmIcon size={16} /> Change video
               </Button>
               {isLocal && myVideo && (
-                <Button variant="secondary" size="sm" onClick={handlePickSubtitle}>
-                  <CaptionsIcon size={16} /> {sync.subtitle ? "Change subtitles" : "Add subtitles"}
-                </Button>
-              )}
-              {isLocal && myVideo && sync.subtitle && (
-                <Button variant="ghost" size="sm" onClick={() => sync.clearSubtitle()}>
-                  Remove subtitles
-                </Button>
+                <span className="flex items-center gap-1.5 text-xs text-muted">
+                  <CaptionsIcon size={14} /> Subtitles are in the ⋮ menu on the player
+                </span>
               )}
             </div>
           )}

@@ -30,7 +30,7 @@ export function TopBar() {
   }
 
   return (
-    <header className="flex items-center justify-between border-b border-border px-8 py-4">
+    <header className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-8">
       <button onClick={leaveRoom} className="outline-none" aria-label="Go to lobby">
         <Wordmark className="text-xl font-bold tracking-tight" />
       </button>

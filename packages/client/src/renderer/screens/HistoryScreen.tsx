@@ -3,8 +3,10 @@ import type { WatchHistoryEntry } from "@syncwatch/shared";
 import { Card } from "../design-system/components/Card.js";
 import { Avatar } from "../design-system/components/Avatar.js";
 import { Button } from "../design-system/components/Button.js";
-import { FilmIcon, UsersIcon } from "../design-system/icons.js";
-import { getHistory } from "../api/rooms.api.js";
+import { FilmIcon, UsersIcon, TrashIcon } from "../design-system/icons.js";
+import { deleteHistoryEntry, getHistory } from "../api/rooms.api.js";
+import { useToast } from "../design-system/components/Toast.js";
+import { useConfirm } from "../design-system/useConfirm.js";
 import { useNavStore } from "../state/nav.store.js";
 import { TopBar } from "./TopBar.js";
 
@@ -17,6 +19,8 @@ function formatWhen(iso: string): string {
 
 export function HistoryScreen() {
   const goToLobby = useNavStore((s) => s.goToLobby);
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [entries, setEntries] = useState<WatchHistoryEntry[] | null>(null);
 
   useEffect(() => {
@@ -25,11 +29,29 @@ export function HistoryScreen() {
       .catch(() => setEntries([]));
   }, []);
 
+  async function handleDelete(entry: WatchHistoryEntry) {
+    const ok = await confirm({
+      title: "Remove from history?",
+      description: `“${entry.title ?? `Room ${entry.roomCode}`}” will be removed from your history. This only affects your view.`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const prev = entries;
+    setEntries((cur) => cur?.filter((e) => !(e.roomCode === entry.roomCode && e.endedAt === entry.endedAt)) ?? cur);
+    try {
+      await deleteHistoryEntry(entry.roomCode);
+    } catch {
+      setEntries(prev ?? null); // roll back on failure
+      toast({ title: "Couldn't remove that item", tone: "danger" });
+    }
+  }
+
   return (
     <div className="min-h-full">
       <TopBar />
 
-      <main className="mx-auto max-w-3xl px-8 py-10">
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Watch history</h1>
@@ -66,7 +88,7 @@ export function HistoryScreen() {
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-3">
                   {entry.coWatchers.length === 0 ? (
                     <span className="text-xs text-muted">watched solo</span>
                   ) : (
@@ -82,6 +104,14 @@ export function HistoryScreen() {
                       </span>
                     </>
                   )}
+                  <button
+                    onClick={() => handleDelete(entry)}
+                    aria-label="Remove from history"
+                    title="Remove from history"
+                    className="rounded-sw p-2 text-muted transition-colors hover:bg-danger-soft hover:text-danger"
+                  >
+                    <TrashIcon size={16} />
+                  </button>
                 </div>
               </Card>
             ))}

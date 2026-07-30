@@ -29,6 +29,7 @@ interface RoomSync {
   setSource: (source: VideoSource) => void;
   verifyFile: (fileName: string, fileSize: number) => void;
   setControl: (mode: PlaybackControl) => void;
+  endRoom: () => void;
   sendChat: (text: string) => void;
   setSubtitle: (fileName: string, vtt: string) => void;
   clearSubtitle: () => void;
@@ -195,6 +196,7 @@ export function useRoomSync(roomCode: string): RoomSync {
     messages,
     subtitle,
     setControl: (mode) => getSocket().emit(SocketEvents.RoomSetControl, { roomCode, playbackControl: mode }),
+    endRoom: () => getSocket().emit(SocketEvents.RoomEnd, { roomCode }),
     sendChat: (text) => getSocket().emit(SocketEvents.ChatSend, { roomCode, text }),
     setSubtitle: (fileName, vtt) => getSocket().emit(SocketEvents.SubtitleSet, { roomCode, fileName, vtt }),
     clearSubtitle: () => getSocket().emit(SocketEvents.SubtitleClear, { roomCode }),

@@ -12,6 +12,9 @@ export function getSocket(): Socket {
   if (socket) return socket;
   socket = io(getSocketUrl(), {
     autoConnect: false,
+    // Prefer WebSocket (fast) but fall back to HTTP long-polling — many mobile
+    // networks/proxies block or slow the raw WebSocket upgrade, and without a
+    // fallback the connection would stall instead of degrading gracefully.
     transports: ["websocket", "polling"],
     auth: (cb) => cb({ token: useAuthStore.getState().accessToken ?? "" }),
   });
