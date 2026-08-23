@@ -57,7 +57,9 @@ export function TopBar() {
   return (
     <header className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-8">
       <button onClick={leaveRoom} className="flex items-center gap-2 outline-none" aria-label="Go to lobby">
-        <Logo size={30} />
+        {/* -top nudge compensates for the mark sitting slightly low in its tile,
+            so it reads as optically centered with the wordmark. */}
+        <Logo size={30} className="relative -top-px" />
         {/* leading-none keeps the wordmark optically centered with the icon;
             hides on very narrow/pop-up widths so the icon alone carries the brand. */}
         <Wordmark className="hidden text-xl font-bold leading-none tracking-tight xs:inline" />

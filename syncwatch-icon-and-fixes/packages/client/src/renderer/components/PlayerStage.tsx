@@ -177,6 +177,7 @@ export function PlayerStage({
   // how VLC and mobile players behave, so a stray click can't pause the movie.
   function onSurfaceClick() {
     if (menuOpen) { setMenuOpen(false); return; }
+    if (chatOpen) { setChatOpen(false); return; } // tap-away closes the chat panel
     if (visible && isPlaying) setActive(false);
     else show();
   }
@@ -322,33 +323,37 @@ export function PlayerStage({
             </div>
           )}
 
-          {/* chat toggle — pulsing neon hint + unread badge */}
-          {chat && (
-            <button
-              onClick={() => setChatOpen((o) => !o)}
-              className={cn("relative rounded-full p-1 transition hover:text-accent", chatOpen ? "text-accent" : "sw-neon text-white")}
-              aria-label="Chat"
-            >
-              <MessageIcon size={20} />
-              {unread > 0 && !chatOpen && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              )}
-            </button>
-          )}
-
           <button onClick={toggleFullscreen} className="transition hover:text-accent" aria-label="Fullscreen">
             {fullscreen ? <MinimizeIcon size={20} /> : <MaximizeIcon size={20} />}
           </button>
         </div>
       </div>
 
-      {/* incoming-message popup (top-right), shown in fullscreen when chat is closed */}
+      {/* floating chat button, top-right over the video — glows only on unread */}
+      {chat && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className={cn(
+            "absolute right-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70",
+            !chatOpen && (visible || unread > 0) ? "opacity-100" : "pointer-events-none opacity-0",
+            unread > 0 && !chatOpen && "sw-neon",
+          )}
+          aria-label="Chat"
+        >
+          <MessageIcon size={20} />
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* incoming-message popup (below the button), in fullscreen when chat is closed */}
       {chat && popup && !chatOpen && fullscreen && (
         <button
           onClick={() => setChatOpen(true)}
-          className="sw-pop absolute right-3 top-3 z-30 flex max-w-[70%] items-start gap-2 rounded-sw border border-white/10 bg-black/85 px-3 py-2 text-left text-white shadow-xl backdrop-blur"
+          className="sw-pop absolute right-3 top-16 z-30 flex max-w-[70%] items-start gap-2 rounded-sw border border-white/10 bg-black/85 px-3 py-2 text-left text-white shadow-xl backdrop-blur"
         >
           <MessageIcon size={16} className="mt-0.5 shrink-0 text-accent" />
           <span className="min-w-0 text-xs">

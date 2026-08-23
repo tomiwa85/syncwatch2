@@ -112,6 +112,9 @@ export function RoomScreen() {
   const isLocal = source?.sourceType === "LOCAL_FILE";
   const showChooser = isHost && (!source || changing);
   const canControl = room.playbackControl === "EVERYONE" || isHost;
+  // A guest may only watch a local file once it's verified against the host's
+  // (the host defines the canonical file, so they're always "in sync").
+  const iAmSynced = isHost || (me?.fileVerified ?? false);
 
   async function handlePickSubtitle() {
     const sub = await pickSubtitle();
@@ -309,7 +312,7 @@ export function RoomScreen() {
             <PlayerStage {...stageProps}>
               <StreamingVideoPlayer ref={playerRef} url={source.url} onTime={setCurrentTime} onDuration={setDuration} />
             </PlayerStage>
-          ) : isLocal && myVideo ? (
+          ) : isLocal && myVideo && iAmSynced ? (
             <div className="flex flex-col gap-3">
               <PlayerStage {...stageProps}>
                 <LocalVideoPlayer
@@ -320,22 +323,41 @@ export function RoomScreen() {
                   onDuration={setDuration}
                 />
               </PlayerStage>
-              {!isHost &&
-                (sync.verifyPending ? (
-                  <div className="flex items-center gap-2 text-sm text-muted">
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-border border-t-accent" />
-                    Checking your file against the host's…
-                  </div>
-                ) : me?.fileVerified ? (
-                  <div className="flex items-center gap-2 text-sm text-success">
-                    <CheckCircleIcon size={16} /> Your file matches the host — you're in sync.
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 rounded-sw border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
-                    <AlertIcon size={16} /> Your file doesn't match the host's (different size). You can still watch, but may be out of sync.
-                  </div>
-                ))}
+              {!isHost && (
+                <div className="flex items-center gap-2 text-sm text-success">
+                  <CheckCircleIcon size={16} /> Your file matches the host — you're in sync.
+                </div>
+              )}
             </div>
+          ) : isLocal && myVideo && !iAmSynced ? (
+            // Guest picked a copy but it isn't verified — playback stays gated
+            // until the file matches the host's (checking, then match or stuck).
+            <Card className="flex aspect-video flex-col items-center justify-center gap-4 border-dashed bg-bg-2 text-center">
+              {sync.verifyPending ? (
+                <>
+                  <span className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent" />
+                  <div>
+                    <p className="font-medium">Checking your file…</p>
+                    <p className="text-sm text-muted">Making sure your copy matches the host's before you start.</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-danger-soft text-danger">
+                    <AlertIcon size={28} />
+                  </span>
+                  <div>
+                    <p className="font-medium">This file doesn't match the host's</p>
+                    <p className="text-sm text-muted">
+                      You need the same file to watch in sync — pick your copy of “{source.fileName}” ({formatSize(source.fileSize)}).
+                    </p>
+                  </div>
+                  <Button variant="gradient" onClick={handleSelectCopy}>
+                    Select a different copy
+                  </Button>
+                </>
+              )}
+            </Card>
           ) : isLocal && !myVideo ? (
             <Card className="flex aspect-video flex-col items-center justify-center gap-4 border-dashed bg-bg-2 text-center">
               <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-accent">
