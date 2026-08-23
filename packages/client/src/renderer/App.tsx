@@ -6,6 +6,7 @@ import { AuthScreen } from "./screens/AuthScreen.js";
 import { LobbyScreen } from "./screens/LobbyScreen.js";
 import { RoomScreen } from "./screens/RoomScreen.js";
 import { HistoryScreen } from "./screens/HistoryScreen.js";
+import { MyRoomsScreen } from "./screens/MyRoomsScreen.js";
 import { SplashScreen } from "./components/SplashScreen.js";
 import { useAuthStore } from "./state/auth.store.js";
 import { useNavStore } from "./state/nav.store.js";
@@ -17,6 +18,7 @@ function Router() {
   if (!isAuthenticated) return <AuthScreen />;
   if (route.name === "room") return <RoomScreen />;
   if (route.name === "history") return <HistoryScreen />;
+  if (route.name === "myRooms") return <MyRoomsScreen />;
   return <LobbyScreen />;
 }
 

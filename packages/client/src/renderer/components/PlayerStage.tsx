@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import type { ChatMessagePayload } from "@syncwatch/shared";
 import { cn } from "../design-system/cn.js";
 import {
   PlayIcon,
@@ -8,6 +9,8 @@ import {
   VolumeIcon,
   VolumeMuteIcon,
   MoreIcon,
+  MessageIcon,
+  XCircleIcon,
 } from "../design-system/icons.js";
 
 /** An item in the player's overflow (⋮) menu. */
@@ -16,6 +19,13 @@ export interface PlayerMenuItem {
   icon?: ComponentType<{ size?: number }>;
   onSelect: () => void;
   tone?: "default" | "danger";
+}
+
+/** Chat wired into the player so it works in fullscreen too. */
+export interface PlayerChat {
+  messages: ChatMessagePayload[];
+  myUserId?: string;
+  onSend: (text: string) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -39,6 +49,8 @@ interface PlayerStageProps {
   onVolume?: (volume: number) => void;
   /** Items for the overflow (⋮) menu — e.g. subtitle controls. Hidden if empty. */
   menuItems?: PlayerMenuItem[];
+  /** Room chat, surfaced as a slide-out panel + notifications (works fullscreen). */
+  chat?: PlayerChat;
   /** The actual player element (LocalVideoPlayer / StreamingVideoPlayer). */
   children: ReactNode;
 }
@@ -56,6 +68,7 @@ export function PlayerStage({
   onSeek,
   onVolume,
   menuItems,
+  chat,
   children,
 }: PlayerStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -65,6 +78,43 @@ export function PlayerStage({
   const [muted, setMuted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const hideTimer = useRef<number | null>(null);
+
+  // ---- chat overlay (works in fullscreen, unlike the app-level sidebar) ----
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatText, setChatText] = useState("");
+  const [unread, setUnread] = useState(0);
+  const [popup, setPopup] = useState<ChatMessagePayload | null>(null);
+  const lastSeen = useRef(0);
+  const chatListRef = useRef<HTMLDivElement>(null);
+  const popupTimer = useRef<number | null>(null);
+  const messages = chat?.messages;
+
+  useEffect(() => {
+    if (!messages) return;
+    if (chatOpen) {
+      lastSeen.current = messages.length;
+      setUnread(0);
+      requestAnimationFrame(() => chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight }));
+      return;
+    }
+    if (messages.length <= lastSeen.current) return;
+    const fromOthers = messages.slice(lastSeen.current).filter((m) => m.userId !== chat?.myUserId);
+    if (fromOthers.length) {
+      setUnread((u) => u + fromOthers.length);
+      setPopup(fromOthers[fromOthers.length - 1]);
+      if (popupTimer.current) window.clearTimeout(popupTimer.current);
+      popupTimer.current = window.setTimeout(() => setPopup(null), 4500);
+    }
+    lastSeen.current = messages.length;
+  }, [messages, chatOpen, chat?.myUserId]);
+
+  function sendChat(e: React.FormEvent) {
+    e.preventDefault();
+    const t = chatText.trim();
+    if (!t || !chat) return;
+    chat.onSend(t);
+    setChatText("");
+  }
 
   const show = useCallback(() => {
     setActive(true);
@@ -127,6 +177,7 @@ export function PlayerStage({
   // how VLC and mobile players behave, so a stray click can't pause the movie.
   function onSurfaceClick() {
     if (menuOpen) { setMenuOpen(false); return; }
+    if (chatOpen) { setChatOpen(false); return; } // tap-away closes the chat panel
     if (visible && isPlaying) setActive(false);
     else show();
   }
@@ -277,6 +328,88 @@ export function PlayerStage({
           </button>
         </div>
       </div>
+
+      {/* floating chat button, top-right over the video — glows only on unread */}
+      {chat && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className={cn(
+            "absolute right-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70",
+            !chatOpen && (visible || unread > 0) ? "opacity-100" : "pointer-events-none opacity-0",
+            unread > 0 && !chatOpen && "sw-neon",
+          )}
+          aria-label="Chat"
+        >
+          <MessageIcon size={20} />
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* incoming-message popup (below the button), in fullscreen when chat is closed */}
+      {chat && popup && !chatOpen && fullscreen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className="sw-pop absolute right-3 top-16 z-30 flex max-w-[70%] items-start gap-2 rounded-sw border border-white/10 bg-black/85 px-3 py-2 text-left text-white shadow-xl backdrop-blur"
+        >
+          <MessageIcon size={16} className="mt-0.5 shrink-0 text-accent" />
+          <span className="min-w-0 text-xs">
+            <span className="font-semibold">{popup.displayName}</span>{" "}
+            <span className="text-white/80">{popup.text}</span>
+          </span>
+        </button>
+      )}
+
+      {/* slide-out chat panel (inside the stage, so it shows in fullscreen) */}
+      {chat && (
+        <div
+          className={cn(
+            "absolute right-0 top-0 z-20 flex h-full w-80 max-w-[85%] flex-col border-l border-white/10 bg-black/85 backdrop-blur-md transition-transform duration-300",
+            chatOpen ? "translate-x-0" : "pointer-events-none translate-x-full",
+          )}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-white">
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <MessageIcon size={16} /> Chat
+            </span>
+            <button onClick={() => setChatOpen(false)} aria-label="Close chat" className="text-white/70 transition hover:text-white">
+              <XCircleIcon size={20} />
+            </button>
+          </div>
+          <div ref={chatListRef} className="flex-1 space-y-2 overflow-y-auto p-3">
+            {messages && messages.length > 0 ? (
+              messages.map((m) => {
+                const mine = m.userId === chat.myUserId;
+                return (
+                  <div key={m.id} className={cn("flex", mine && "justify-end")}>
+                    <div className={cn("max-w-[85%] rounded-sw px-3 py-1.5 text-sm", mine ? "bg-accent text-accent-fg" : "bg-white/10 text-white")}>
+                      {!mine && <p className="text-[11px] font-medium text-white/60">{m.displayName}</p>}
+                      <p className="break-words">{m.text}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="py-6 text-center text-xs text-white/50">No messages yet. Say hi 👋</p>
+            )}
+          </div>
+          <form onSubmit={sendChat} className="flex gap-2 border-t border-white/10 p-3">
+            <input
+              value={chatText}
+              onChange={(e) => setChatText(e.target.value)}
+              placeholder="Message…"
+              maxLength={1000}
+              className="h-9 flex-1 rounded-sw border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-white/40 focus-visible:border-accent focus-visible:outline-none"
+            />
+            <button type="submit" className="rounded-sw bg-brand px-3 text-sm font-medium text-white transition hover:brightness-110">
+              Send
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

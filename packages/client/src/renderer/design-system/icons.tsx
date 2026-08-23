@@ -173,6 +173,15 @@ export const EyeOffIcon = (p: IconProps) => (
   </Base>
 );
 
+export const GridIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </Base>
+);
+
 export const TrashIcon = (p: IconProps) => (
   <Base {...p}>
     <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
@@ -210,7 +219,7 @@ export const GlobeIcon = (p: IconProps) => (
 
 /* ---- The SyncWatch logo — the exact brand artwork (full lockup: mark + wordmark + tagline) ---- */
 
-/** Renders the exact SyncWatch logo PNG. `size` sets the height in px (square art). */
+/** Renders the SyncWatch app mark as a rounded tile. `size` sets the px height. */
 export function Logo({ size = 40, className }: { size?: number; className?: string }) {
   return (
     <img
@@ -218,8 +227,8 @@ export function Logo({ size = 40, className }: { size?: number; className?: stri
       alt="SyncWatch"
       width={size}
       height={size}
-      className={className}
-      style={{ objectFit: "contain" }}
+      className={`block shrink-0 rounded-[22%] ${className ?? ""}`}
+      style={{ objectFit: "cover" }}
       draggable={false}
     />
   );

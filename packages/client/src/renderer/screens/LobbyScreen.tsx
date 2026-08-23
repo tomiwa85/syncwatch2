@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RoomSummary, RoomVisibility } from "@syncwatch/shared";
+import type { RoomSummary } from "@syncwatch/shared";
 import { Button } from "../design-system/components/Button.js";
 import { Input } from "../design-system/components/Input.js";
 import { Card } from "../design-system/components/Card.js";
@@ -16,7 +16,8 @@ import {
   SearchIcon,
 } from "../design-system/icons.js";
 import { ApiError } from "../api/http.js";
-import { createRoom, getRoom, joinRoom, listPublicRooms } from "../api/rooms.api.js";
+import { getRoom, joinRoom, listPublicRooms } from "../api/rooms.api.js";
+import { CreateRoomModal } from "../components/CreateRoomModal.js";
 import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
 import { Tour, type TourStep } from "../components/Tour.js";
@@ -36,9 +37,6 @@ export function LobbyScreen() {
   const { toast } = useToast();
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [visibility, setVisibility] = useState<RoomVisibility>("PRIVATE");
-  const [createPassword, setCreatePassword] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
@@ -109,22 +107,6 @@ export function LobbyScreen() {
   useEffect(() => {
     void refreshPublic();
   }, []);
-
-  async function handleCreate() {
-    setCreating(true);
-    try {
-      const room = await createRoom(visibility, { password: createPassword.trim() || undefined });
-      setCreateOpen(false);
-      setCreatePassword("");
-      toast({ title: "Room created", description: `Share code ${room.code} to invite people.`, tone: "success" });
-      enterRoom(room);
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Could not create the room.";
-      toast({ title: "Create failed", description: message, tone: "danger" });
-    } finally {
-      setCreating(false);
-    }
-  }
 
   async function handleJoin(code: string, password?: string) {
     const clean = code.trim().toUpperCase();
@@ -303,65 +285,8 @@ export function LobbyScreen() {
         </section>
       </main>
 
-      {/* Create-room modal */}
-      <Modal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        icon={PlusIcon}
-        tone="brand"
-        title="Create a watch party"
-        description="Pick who can join. You can share the code either way."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="gradient" onClick={handleCreate} disabled={creating}>
-              {creating ? "Creating…" : "Create room"}
-            </Button>
-          </>
-        }
-      >
-        <div className="grid grid-cols-2 gap-3">
-          {(
-            [
-              { value: "PRIVATE", icon: LockIcon, title: "Private", desc: "Only people with the code" },
-              { value: "PUBLIC", icon: GlobeIcon, title: "Public", desc: "Anyone can find & join" },
-            ] as const
-          ).map((opt) => {
-            const active = visibility === opt.value;
-            const Icon = opt.icon;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setVisibility(opt.value)}
-                className={
-                  "flex flex-col items-start gap-2 rounded-sw border p-4 text-left transition-all " +
-                  (active
-                    ? "border-accent bg-brand-soft"
-                    : "border-border bg-surface hover:border-border-strong")
-                }
-              >
-                <span className={"flex h-9 w-9 items-center justify-center rounded-sw " + (active ? "bg-accent text-accent-fg" : "bg-surface-raised text-muted")}>
-                  <Icon size={18} />
-                </span>
-                <span className="font-medium">{opt.title}</span>
-                <span className="text-xs text-muted">{opt.desc}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-4">
-          <Input
-            label="Password (optional)"
-            type="password"
-            placeholder="Leave blank for no password"
-            value={createPassword}
-            onChange={(e) => setCreatePassword(e.target.value)}
-          />
-        </div>
-      </Modal>
+      {/* Create-room modal (shared with My Rooms) */}
+      <CreateRoomModal open={createOpen} onOpenChange={setCreateOpen} onCreated={enterRoom} />
 
       {/* Join password prompt */}
       <Modal

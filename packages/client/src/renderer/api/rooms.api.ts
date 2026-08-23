@@ -40,6 +40,22 @@ export async function listPublicRooms(): Promise<RoomSummary[]> {
   return res.rooms;
 }
 
+/** Rooms the current user is hosting. */
+export async function listMyRooms(): Promise<RoomSummary[]> {
+  const res = await apiRequest<{ rooms: RoomSummary[] }>("/api/users/me/rooms");
+  return res.rooms;
+}
+
+/** Permanently delete a room the user hosts. */
+export async function deleteRoom(code: string): Promise<void> {
+  await apiRequest<void>(`/api/rooms/${code}`, { method: "DELETE" });
+}
+
+/** Delete the current account and all associated data. Irreversible. */
+export async function deleteAccount(): Promise<void> {
+  await apiRequest<void>("/api/users/me", { method: "DELETE" });
+}
+
 export async function getHistory(): Promise<WatchHistoryEntry[]> {
   const res = await apiRequest<GetHistoryResponse>("/api/users/me/history");
   return res.entries;

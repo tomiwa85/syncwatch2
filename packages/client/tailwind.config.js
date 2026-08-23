@@ -3,6 +3,11 @@ export default {
   content: ["./src/renderer/**/*.{ts,tsx,html}"],
   theme: {
     extend: {
+      screens: {
+        // Extra-small breakpoint for narrow/pop-up windows (below this, the
+        // top-bar wordmark collapses to just the icon).
+        xs: "480px",
+      },
       colors: {
         bg: "var(--sw-bg)",
         "bg-2": "var(--sw-bg-2)",
