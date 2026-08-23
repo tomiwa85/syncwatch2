@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { createRoomRequestSchema, joinRoomRequestSchema } from "@syncwatch/shared";
-import { RoomError, createRoom, getRoomByCode, joinRoom, listPublicRooms } from "./rooms.service.js";
+import { RoomError, createRoom, deleteRoom, getRoomByCode, joinRoom, listPublicRooms } from "./rooms.service.js";
 
 export async function roomRoutes(app: FastifyInstance) {
   // All room routes require a valid access token.
@@ -39,6 +39,16 @@ export async function roomRoutes(app: FastifyInstance) {
     try {
       const room = await joinRoom(request.userId!, request.params.code.toUpperCase(), body.password);
       return reply.send({ room });
+    } catch (err) {
+      if (err instanceof RoomError) return reply.code(err.status).send({ message: err.message });
+      throw err;
+    }
+  });
+
+  app.delete<{ Params: { code: string } }>("/api/rooms/:code", async (request, reply) => {
+    try {
+      await deleteRoom(request.userId!, request.params.code.toUpperCase());
+      return reply.code(204).send();
     } catch (err) {
       if (err instanceof RoomError) return reply.code(err.status).send({ message: err.message });
       throw err;

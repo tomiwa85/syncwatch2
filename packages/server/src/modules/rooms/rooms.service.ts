@@ -173,6 +173,35 @@ export async function setRoomSource(userId: string, code: string, source: VideoS
   return getRoomByCode(code);
 }
 
+/** Active (not-yet-ended) rooms the user is hosting. */
+export async function listHostedRooms(userId: string): Promise<RoomSummary[]> {
+  const rooms = await prisma.room.findMany({
+    where: { hostId: userId, endedAt: null },
+    include: includeMembers,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return rooms.map(toRoomSummary);
+}
+
+/** Permanently delete a room the user hosts (its members are cascade-removed). */
+export async function deleteRoom(userId: string, code: string): Promise<void> {
+  const room = await prisma.room.findUnique({ where: { code } });
+  if (!room) throw new RoomError("Room not found", 404);
+  if (room.hostId !== userId) throw new RoomError("Only the host can delete this room", 403);
+  await prisma.room.delete({ where: { code } });
+}
+
+/** Delete a user and scrub everything tied to them: hosted rooms (and their
+ *  members), the user's memberships elsewhere, refresh tokens, and the account. */
+export async function deleteUserAccount(userId: string): Promise<void> {
+  await prisma.$transaction([
+    prisma.room.deleteMany({ where: { hostId: userId } }), // cascades to those rooms' members
+    prisma.roomMember.deleteMany({ where: { userId } }), // memberships in others' rooms
+    prisma.user.delete({ where: { id: userId } }), // refresh tokens cascade
+  ]);
+}
+
 export async function listPublicRooms(): Promise<RoomSummary[]> {
   const rooms = await prisma.room.findMany({
     where: { visibility: "PUBLIC", endedAt: null },
