@@ -8,6 +8,8 @@ import { deleteHistoryEntry, getHistory } from "../api/rooms.api.js";
 import { useToast } from "../design-system/components/Toast.js";
 import { useConfirm } from "../design-system/useConfirm.js";
 import { useNavStore } from "../state/nav.store.js";
+import { BottomSheet } from "../components/BottomSheet.js";
+import { InfoHint } from "../components/InfoHint.js";
 import { TopBar } from "./TopBar.js";
 
 function formatWhen(iso: string): string {
@@ -22,6 +24,8 @@ export function HistoryScreen() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [entries, setEntries] = useState<WatchHistoryEntry[] | null>(null);
+  // The entry whose watchers are shown in the slide-up sheet.
+  const [openEntry, setOpenEntry] = useState<WatchHistoryEntry | null>(null);
 
   useEffect(() => {
     getHistory()
@@ -52,14 +56,17 @@ export function HistoryScreen() {
       <TopBar />
 
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold">Watch history</h1>
-            <p className="mt-1 text-sm text-muted">Movies you've watched and who you watched them with.</p>
+            <p className="mt-1 truncate text-sm text-muted">Movies you've watched and who you watched them with.</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={goToLobby}>
-            Back to lobby
-          </Button>
+          <InfoHint text="Back to lobby">
+            <Button variant="secondary" size="sm" className="shrink-0 whitespace-nowrap" onClick={goToLobby}>
+              <span className="hidden sm:inline">Back to lobby</span>
+              <span className="sm:hidden">Lobby</span>
+            </Button>
+          </InfoHint>
         </div>
 
         {entries === null ? (
@@ -77,8 +84,12 @@ export function HistoryScreen() {
         ) : (
           <div className="flex flex-col gap-3">
             {entries.map((entry) => (
-              <Card key={`${entry.roomCode}-${entry.endedAt}`} className="flex items-center justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-3">
+              <Card key={`${entry.roomCode}-${entry.endedAt}`} className="flex items-center justify-between gap-4 !p-0">
+                {/* Tap the row to see everyone who watched. */}
+                <button
+                  onClick={() => setOpenEntry(entry)}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-sw p-4 text-left transition-colors hover:bg-surface-raised"
+                >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sw bg-brand-soft text-accent">
                     <FilmIcon size={20} />
                   </span>
@@ -86,13 +97,17 @@ export function HistoryScreen() {
                     <p className="truncate font-medium">{entry.title ?? `Room ${entry.roomCode}`}</p>
                     <p className="text-xs text-muted">{formatWhen(entry.endedAt)}</p>
                   </div>
-                </div>
+                </button>
 
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex shrink-0 items-center gap-3 pr-4">
                   {entry.coWatchers.length === 0 ? (
-                    <span className="text-xs text-muted">watched solo</span>
+                    <span className="hidden text-xs text-muted sm:inline">watched solo</span>
                   ) : (
-                    <>
+                    <button
+                      onClick={() => setOpenEntry(entry)}
+                      className="flex items-center gap-2 rounded-sw px-1 py-1 transition-colors hover:bg-surface-raised"
+                      title="See who watched"
+                    >
                       <div className="flex -space-x-2">
                         {entry.coWatchers.slice(0, 4).map((c) => (
                           <Avatar key={c.userId} name={c.displayName} size="sm" className="ring-2 ring-surface" />
@@ -102,7 +117,7 @@ export function HistoryScreen() {
                         <UsersIcon size={13} />
                         {entry.coWatchers.length}
                       </span>
-                    </>
+                    </button>
                   )}
                   <button
                     onClick={() => handleDelete(entry)}
@@ -118,6 +133,34 @@ export function HistoryScreen() {
           </div>
         )}
       </main>
+
+      {/* Glassmorphic slide-up: everyone who watched this room. */}
+      <BottomSheet
+        open={openEntry !== null}
+        onClose={() => setOpenEntry(null)}
+        title={
+          openEntry ? (
+            <span className="flex items-center gap-2">
+              <UsersIcon size={16} />
+              {openEntry.title ?? `Room ${openEntry.roomCode}`}
+              <span className="text-muted">· {openEntry.coWatchers.length} {openEntry.coWatchers.length === 1 ? "person" : "people"}</span>
+            </span>
+          ) : null
+        }
+      >
+        {openEntry && openEntry.coWatchers.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">You watched this one solo.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {openEntry?.coWatchers.map((c) => (
+              <div key={c.userId} className="flex items-center gap-3 rounded-sw px-2 py-2.5 hover:bg-white/5">
+                <Avatar name={c.displayName} size="md" />
+                <span className="min-w-0 truncate font-medium">{c.displayName}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </BottomSheet>
     </div>
   );
 }

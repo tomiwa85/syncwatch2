@@ -9,6 +9,7 @@ import { useConfirm } from "../design-system/useConfirm.js";
 import { GridIcon, PlusIcon, GlobeIcon, LockIcon, TrashIcon, PlayIcon } from "../design-system/icons.js";
 import { listMyRooms, deleteRoom } from "../api/rooms.api.js";
 import { CreateRoomModal } from "../components/CreateRoomModal.js";
+import { InfoHint } from "../components/InfoHint.js";
 import { useNavStore } from "../state/nav.store.js";
 import { TopBar } from "./TopBar.js";
 
@@ -52,19 +53,26 @@ export function MyRoomsScreen() {
 
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold">
               <GridIcon size={22} /> My rooms
             </h1>
-            <p className="mt-1 text-sm text-muted">Rooms you're hosting — open, or delete them.</p>
+            <p className="mt-1 truncate text-sm text-muted">Rooms you're hosting — open, or delete them.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="gradient" size="sm" onClick={() => setCreateOpen(true)}>
-              <PlusIcon size={16} /> New room
-            </Button>
-            <Button variant="secondary" size="sm" onClick={goToLobby}>
-              Back to lobby
-            </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <InfoHint text="Create a new room">
+              <Button variant="gradient" size="sm" className="whitespace-nowrap" onClick={() => setCreateOpen(true)}>
+                <PlusIcon size={16} />
+                <span className="hidden sm:inline">New room</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </InfoHint>
+            <InfoHint text="Back to lobby">
+              <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={goToLobby}>
+                <span className="hidden sm:inline">Back to lobby</span>
+                <span className="sm:hidden">Lobby</span>
+              </Button>
+            </InfoHint>
           </div>
         </div>
 
@@ -94,21 +102,30 @@ export function MyRoomsScreen() {
                     ))}
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 font-medium">
+                    <div className="flex flex-wrap items-center gap-2 font-medium">
                       <span className="tracking-widest">{room.code}</span>
                       {room.visibility === "PUBLIC" ? (
-                        <Badge tone="accent">
-                          <GlobeIcon size={12} /> Public
-                        </Badge>
+                        <InfoHint text="Public room">
+                          <Badge tone="accent">
+                            <GlobeIcon size={12} />
+                            <span className="hidden sm:inline"> Public</span>
+                          </Badge>
+                        </InfoHint>
                       ) : (
-                        <Badge>
-                          <LockIcon size={12} /> Private
-                        </Badge>
+                        <InfoHint text="Private room">
+                          <Badge>
+                            <LockIcon size={12} />
+                            <span className="hidden sm:inline"> Private</span>
+                          </Badge>
+                        </InfoHint>
                       )}
                       {room.hasPassword && (
-                        <Badge>
-                          <LockIcon size={12} /> Password
-                        </Badge>
+                        <InfoHint text="Password protected">
+                          <Badge>
+                            <LockIcon size={12} />
+                            <span className="hidden sm:inline"> Password</span>
+                          </Badge>
+                        </InfoHint>
                       )}
                     </div>
                     <p className="text-xs text-muted">{room.members.length} in the room</p>
