@@ -1,5 +1,8 @@
 name: Build Android APK
 
+# Builds the SyncWatch Android app (Capacitor) in the cloud and publishes the
+# APK as a downloadable artifact. Runs on every push and can be triggered
+# manually from the Actions tab (Run workflow).
 on:
   push:
     branches: [main, master]
@@ -31,8 +34,15 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Google removed the legacy "tools" package, which this action installs
+          # by default and now fails on. Install only platform-tools; Gradle
+          # fetches the platform + build-tools it needs during the build.
+          packages: platform-tools
 
       - name: Install dependencies
+        # Only the client (+ its shared dep) is needed for the APK — skip the
+        # server's native modules, and skip the Electron binary download.
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: pnpm install --no-frozen-lockfile --filter "@syncwatch/client..."
@@ -42,6 +52,8 @@ jobs:
 
       - name: Generate Android project
         working-directory: packages/client
+        # Add the native project fresh in CI (it is not committed to the repo),
+        # then sync the freshly built web assets into it.
         run: |
           npx cap add android
           npx cap sync android
