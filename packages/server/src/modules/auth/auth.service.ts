@@ -8,6 +8,12 @@ import { prisma } from "../../db/prisma.js";
 
 export class AuthError extends Error {}
 
+// OWASP-recommended argon2id parameters (19 MiB, 2 passes, 1 lane). argon2's
+// defaults (64 MiB, 3 passes, 4 lanes) are far heavier and, on a fractional-CPU
+// host, made every sign-in wait seconds just on hashing. Hashes made with the old
+// defaults still verify (params live in the hash) and are upgraded on next login.
+const HASH_OPTIONS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 } as const;
+
 function toAuthUser(user: { id: string; email: string; displayName: string }): AuthUser {
   return { id: user.id, email: user.email, displayName: user.displayName };
 }
@@ -38,7 +44,7 @@ export async function signup(input: SignupRequest) {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) throw new AuthError("An account with this email already exists");
 
-  const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+  const passwordHash = await argon2.hash(input.password, HASH_OPTIONS);
   const user = await prisma.user.create({
     data: { email: input.email, passwordHash, displayName: input.displayName },
   });
@@ -54,6 +60,15 @@ export async function login(input: LoginRequest) {
 
   const valid = await argon2.verify(user.passwordHash, input.password);
   if (!valid) throw new AuthError("Invalid email or password");
+
+  // Upgrade hashes made with the old heavy defaults so future logins are fast.
+  // Fire-and-forget: the user shouldn't wait on this write.
+  if (argon2.needsRehash(user.passwordHash, HASH_OPTIONS)) {
+    void argon2
+      .hash(input.password, HASH_OPTIONS)
+      .then((passwordHash) => prisma.user.update({ where: { id: user.id }, data: { passwordHash } }))
+      .catch(() => {});
+  }
 
   const accessToken = issueAccessToken(user.id);
   const refreshToken = await issueRefreshToken(user.id);

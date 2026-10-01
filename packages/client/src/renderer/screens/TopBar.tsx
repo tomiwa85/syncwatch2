@@ -36,7 +36,7 @@ export function TopBar() {
       tone: "danger",
     });
     if (!ok) return;
-    await logout();
+    logout(); // instant — server-side revoke continues in the background
     leaveRoom();
     toast({ title: "Signed out" });
   }

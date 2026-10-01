@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loginRequestSchema, signupRequestSchema } from "@syncwatch/shared";
 import { Button } from "../design-system/components/Button.js";
 import { Input } from "../design-system/components/Input.js";
@@ -18,6 +18,17 @@ export function AuthScreen() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  // If a sign-in is still pending after a few seconds, the free server is almost
+  // certainly waking from sleep — say so, rather than looking frozen.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!submitting) {
+      setSlow(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSlow(true), 4000);
+    return () => window.clearTimeout(t);
+  }, [submitting]);
   const { toast } = useToast();
   const setSession = useAuthStore((s) => s.setSession);
 
@@ -123,6 +134,11 @@ export function AuthScreen() {
             <Button type="submit" variant="gradient" size="lg" fullWidth disabled={submitting}>
               {submitting ? "Please wait…" : isSignup ? "Create account" : "Sign in"}
             </Button>
+            {slow && (
+              <p className="text-center text-xs text-muted">
+                Waking up the server — this can take up to a minute after it's been idle.
+              </p>
+            )}
           </form>
         </div>
 
