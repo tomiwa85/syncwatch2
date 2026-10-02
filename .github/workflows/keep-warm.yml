@@ -7,7 +7,8 @@ on:
 
 # NOTE: GitHub delays/skips scheduled runs heavily on free repos (observed gaps of
 # 3-7 hours), so this alone can't keep a free Render instance awake. Pair it with
-# an external pinger (e.g. cron-job.org) hitting /api/health every 5-10 minutes.
+# a backup. The server also pings itself every 10 minutes (src/keep-alive.ts).
+# Use /api/ping, never /api/health, for pings: /api/health wakes the database.
 
 jobs:
   ping:
