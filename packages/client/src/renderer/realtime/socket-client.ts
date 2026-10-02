@@ -31,6 +31,16 @@ export function getSocket(): Socket {
     }
   });
 
+  // Android pauses the app while you're in the file picker or another app, the
+  // connection drops, and socket.io then sits out its retry back-off. When the
+  // app comes back to the front mid-reconnect, retry immediately instead.
+  // (`active` is false after a deliberate disconnect, e.g. sign-out.)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && socket?.active && !socket.connected) {
+      socket.disconnect().connect();
+    }
+  });
+
   return socket;
 }
 

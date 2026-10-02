@@ -1,5 +1,8 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
+
+/** The app's own native plugin (packages/client/native/android/ImmersivePlugin.java). */
+const Immersive = registerPlugin<{ enter(): Promise<void>; exit(): Promise<void> }>("Immersive");
 
 /** True inside the Android (Capacitor) app; false in Electron / a browser. */
 export const isNative = Capacitor.isNativePlatform();
@@ -22,10 +25,13 @@ export function syncStatusBar(theme: "dark" | "light"): void {
   void StatusBar.setBackgroundColor({ color: dark ? "#080B16" : "#EEF0F8" }).catch(() => {});
 }
 
-/** Hide/show the status bar (used for immersive video). */
-export function setStatusBarHidden(hidden: boolean): void {
+/** Hide/show the status bar AND the bottom navigation bar (immersive video). */
+export function setSystemBarsHidden(hidden: boolean): void {
   if (!isNative) return;
-  void (hidden ? StatusBar.hide() : StatusBar.show()).catch(() => {});
+  void (hidden ? Immersive.enter() : Immersive.exit()).catch(() => {
+    // An install built before the native plugin existed: at least do the status bar.
+    void (hidden ? StatusBar.hide() : StatusBar.show()).catch(() => {});
+  });
 }
 
 /** Tiny localStorage wrapper that never throws (private mode, blocked storage). */

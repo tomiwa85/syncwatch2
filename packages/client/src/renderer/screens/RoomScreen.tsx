@@ -87,12 +87,36 @@ export function RoomScreen() {
 
   const source = room?.source ?? null;
   const isStreaming = source?.sourceType === "STREAMING_URL";
-  const hasPlayer = isStreaming || Boolean(myVideo);
+  // Whether a player element is actually on screen — must mirror the render
+  // conditions below. A guest's player only mounts once their file is verified,
+  // so keying this on "has a file" (as it used to be) attached the engine before
+  // the player existed and never re-attached: the guest's video sat black,
+  // never seeking or playing.
+  const amHost = room?.hostId === userId;
+  const amVerified = room?.members.find((m) => m.userId === userId)?.fileVerified ?? false;
+  const choosing = amHost && (!source || changing);
+  const playerMounted =
+    !preparing &&
+    !choosing &&
+    (isStreaming || (source?.sourceType === "LOCAL_FILE" && Boolean(myVideo) && (amHost || amVerified)));
+
+  // Latest authoritative playback, readable inside the effect without making it
+  // a dependency (it changes on every sync tick).
+  const playbackRef = useRef(sync.playback);
+  playbackRef.current = sync.playback;
 
   useEffect(() => {
-    sync.engine.setPlayer(hasPlayer ? playerRef.current : null);
+    const player = playerMounted ? playerRef.current : null;
+    sync.engine.setPlayer(player);
+    if (player) {
+      // Jump straight to where the room is. Without this, someone arriving while
+      // the host is paused sits at 0:00 until the host next plays or seeks.
+      const p = playbackRef.current;
+      const elapsed = p.isPlaying ? (Date.now() - Date.parse(p.updatedAt)) / 1000 : 0;
+      sync.engine.hardApply({ currentTime: Math.max(0, p.currentTime + elapsed), isPlaying: p.isPlaying });
+    }
     return () => sync.engine.setPlayer(null);
-  }, [hasPlayer, source?.sourceType, isStreaming ? source?.url : myVideo?.forSig, sync.engine]);
+  }, [playerMounted, source?.sourceType, isStreaming ? source?.url : myVideo?.forSig, sync.engine]);
 
   // Pop-up notification for incoming chat messages from other people.
   const seenChat = useRef(0);

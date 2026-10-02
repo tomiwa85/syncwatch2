@@ -14,7 +14,7 @@ import {
   RotateIcon,
 } from "../design-system/icons.js";
 import { BackPriority, useBackHandler } from "../native/back-button.js";
-import { isPhone, isTouchDevice, prefs, setStatusBarHidden } from "../native/platform.js";
+import { isPhone, isTouchDevice, prefs, setSystemBarsHidden } from "../native/platform.js";
 
 /** An item in the player's overflow (⋮) menu. */
 export interface PlayerMenuItem {
@@ -48,6 +48,16 @@ function isDeviceLandscape(): boolean {
   const type = (screen.orientation as ScreenOrientation | undefined)?.type;
   if (type) return type.startsWith("landscape");
   return window.matchMedia("(orientation: landscape)").matches;
+}
+
+/** The SyncWatch violet→blue, for the played part of the seek bar. */
+const BRAND_TRAIL = "linear-gradient(90deg, var(--sw-violet), var(--sw-blue))";
+
+/** Slider background: `fill` covers the first `fraction` of the bar, the rest is a faint track. */
+function trail(fraction: number, fill: string): string {
+  const pct = Math.min(100, Math.max(0, fraction * 100));
+  const layer = fill.startsWith("linear-gradient") ? fill : `linear-gradient(${fill}, ${fill})`;
+  return `${layer} left / ${pct}% 100% no-repeat, rgba(255,255,255,0.25)`;
 }
 
 const AUTO_ROTATE_KEY = "sw-auto-rotate";
@@ -237,7 +247,7 @@ export function PlayerStage({
 
   // In immersive: hide the status bar, and stop the page behind from scrolling.
   useEffect(() => {
-    setStatusBarHidden(immersive);
+    setSystemBarsHidden(immersive);
     if (!pseudoFull) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -245,7 +255,7 @@ export function PlayerStage({
       document.body.style.overflow = prev;
     };
   }, [immersive, pseudoFull]);
-  useEffect(() => () => setStatusBarHidden(false), []);
+  useEffect(() => () => setSystemBarsHidden(false), []);
 
   // One-time tip for phone users holding it upright.
   useEffect(() => {
@@ -466,7 +476,8 @@ export function PlayerStage({
           value={Math.min(currentTime, duration || 0)}
           disabled={!canControl}
           onChange={(e) => onSeek(Number(e.target.value))}
-          className="mb-2 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/25 accent-[color:var(--sw-accent)] disabled:cursor-not-allowed"
+          className="sw-range mb-2 h-1.5 w-full"
+          style={{ background: trail(duration > 0 ? currentTime / duration : 0, BRAND_TRAIL) }}
           aria-label="Seek"
         />
         <div className="flex items-center gap-3 text-white">
@@ -487,7 +498,8 @@ export function PlayerStage({
                 step={0.05}
                 value={muted ? 0 : volume}
                 onChange={(e) => applyVolume(Number(e.target.value))}
-                className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-white/25 accent-white"
+                className="sw-range h-1 w-20"
+                style={{ background: trail(muted ? 0 : volume, "rgba(255,255,255,0.9)") }}
                 aria-label="Volume"
               />
             )}
