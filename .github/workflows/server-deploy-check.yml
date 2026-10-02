@@ -1,0 +1,30 @@
+name: Server deploy check
+
+# Runs the same install step as the server's Dockerfile (pnpm 10, frozen
+# lockfile) on every push. Render's own deploy failures aren't visible from
+# GitHub, so a stale lockfile once silently broke every deploy for hours —
+# this turns that into a red check right here instead.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # matches the Dockerfile (node:20)
+
+      - name: Same install as the Dockerfile (pnpm 10, frozen lockfile)
+        run: |
+          npm install -g pnpm@10
+          pnpm install --frozen-lockfile --filter "@syncwatch/server..."
+
+      - name: Server typecheck
+        run: |
+          pnpm --filter @syncwatch/server exec prisma generate
+          pnpm --filter @syncwatch/server exec tsc --noEmit -p tsconfig.json
