@@ -60,6 +60,9 @@ jobs:
           # App-specific native code (fullscreen that also hides the bottom nav
           # bar). The generated project is throwaway, so copy ours in each build.
           cp native/android/ImmersivePlugin.java native/android/MainActivity.java android/app/src/main/java/com/syncwatch/app/
+          # Same version as the splash/lobby label (v1.<run>), so Android's app info matches.
+          sed -i "s/versionCode 1$/versionCode ${GITHUB_RUN_NUMBER}/; s/versionName \"1.0\"/versionName \"1.${GITHUB_RUN_NUMBER}\"/" android/app/build.gradle
+          grep -nE "versionCode|versionName" android/app/build.gradle || true
           npx @capacitor/assets generate --android --iconBackgroundColor '#0B0F1A' --iconBackgroundColorDark '#0B0F1A' --splashBackgroundColor '#0B0F1A' --splashBackgroundColorDark '#0B0F1A' || echo "::warning::icon/splash generation skipped (using defaults)"
           node -e "const fs=require('fs');const p='android/app/src/main/AndroidManifest.xml';let x=fs.readFileSync(p,'utf8');if(!x.includes('android:screenOrientation')){x=x.replace(/<activity\b/, '<activity\n            android:screenOrientation=\"fullUser\"');fs.writeFileSync(p,x);console.log('rotation enabled')}" || echo "::warning::manifest rotation patch skipped"
 

@@ -8,10 +8,10 @@ import react from "@vitejs/plugin-react";
 // points at the hosted server.
 const BACKEND_URL = "https://syncwatch-server-szu2.onrender.com";
 
-// CI (GitHub Actions) provides the run number and commit; local builds say so.
-const BUILD_LABEL = process.env.GITHUB_RUN_NUMBER
-  ? `Build #${process.env.GITHUB_RUN_NUMBER} · ${(process.env.GITHUB_SHA ?? "").slice(0, 7)}`
-  : "Local build";
+// App version shown on the splash + lobby: "v1.<CI build number>" (e.g. v1.28).
+// The Android workflow stamps the same number into the APK's versionName, so
+// the app and Android's app info always agree. Local builds say "dev".
+const BUILD_LABEL = process.env.GITHUB_RUN_NUMBER ? `v1.${process.env.GITHUB_RUN_NUMBER}` : "dev";
 
 export default defineConfig({
   root: resolve(__dirname, "src/renderer"),
