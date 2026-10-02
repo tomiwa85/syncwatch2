@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "../design-system/cn.js";
 import { Logo, Wordmark } from "../design-system/icons.js";
+import { BUILD_LABEL } from "../config.js";
 
 /** Branded opening screen shown briefly on launch, then fades out. */
 const LOADING_LINES = [
@@ -41,6 +42,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         <div className="sw-indeterminate h-full w-1/3 rounded-full bg-brand" />
       </div>
       <p className="mt-4 h-4 text-xs text-muted transition-opacity duration-300">{LOADING_LINES[line]}</p>
+      <p className="absolute bottom-6 text-[11px] text-muted/60">{BUILD_LABEL}</p>
     </div>
   );
 }

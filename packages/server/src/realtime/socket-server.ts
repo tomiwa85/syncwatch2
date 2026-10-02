@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { Server } from "socket.io";
+import { Server, type Socket } from "socket.io";
 import {
   SocketEvents,
   chatSendPayloadSchema,
@@ -51,6 +51,25 @@ function cancelPendingEnd(code: string): void {
   }
 }
 
+/**
+ * A message can arrive before this connection has (re)joined its room: when a
+ * connection drops (e.g. Android pausing the app for the file picker), socket.io
+ * queues what the client sends and flushes it on reconnect BEFORE the client's
+ * own re-join. Those messages used to be silently dropped — a guest's "verify my
+ * file" was lost and they sat on "Checking your file…" forever. If the user is a
+ * member of the live room, join them now instead.
+ */
+async function ensureInRoom(socket: Socket, code: string, userId: string): Promise<boolean> {
+  if (socket.rooms.has(code)) return true;
+  const member = await prisma.roomMember.findFirst({
+    where: { userId, room: { code, endedAt: null } },
+    select: { id: true },
+  });
+  if (!member) return false;
+  socket.join(code);
+  return true;
+}
+
 // Whether a user may drive playback: always in EVERYONE mode, host-only in HOST mode.
 async function canControlPlayback(code: string, userId: string): Promise<boolean> {
   const control = await getRoomControl(code);
@@ -81,7 +100,18 @@ export function attachSocketServer(httpServer: HttpServer): Server {
   io.on("connection", (socket) => {
     const { userId, displayName } = socket.data as SocketData;
 
-    socket.on(SocketEvents.RoomJoin, async (payload) => {
+    // Apply this client's messages strictly in arrival order. Handlers are async
+    // (database work), so without this a later message could finish first —
+    // e.g. after a reconnect the queued "verify my file" and the re-join raced,
+    // and the re-join's stale room snapshot overwrote the fresh "verified" result
+    // on the guest's screen.
+    let queue: Promise<unknown> = Promise.resolve();
+    const handle = (event: string, fn: (payload: unknown) => unknown) =>
+      socket.on(event, (payload: unknown) => {
+        queue = queue.then(() => fn(payload)).catch((err) => console.error(`socket handler "${event}" failed`, err));
+      });
+
+    handle(SocketEvents.RoomJoin, async (payload) => {
       const parsed = roomJoinPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
@@ -103,7 +133,7 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     });
 
     // Host explicitly ends the room now (their "End party" button) — skip grace.
-    socket.on(SocketEvents.RoomEnd, async (payload) => {
+    handle(SocketEvents.RoomEnd, async (payload) => {
       const parsed = roomEndPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
@@ -117,7 +147,7 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     // A `room:leave` means "stop watching in this view" — the socket may still be
     // connected (e.g. navigating to the lobby). The room only ends when the host's
     // socket actually disconnects, so a transient leave/rejoin can't kill the room.
-    socket.on(SocketEvents.RoomLeave, (payload) => {
+    handle(SocketEvents.RoomLeave, (payload) => {
       const parsed = roomLeavePayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
@@ -125,39 +155,39 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       socket.to(code).emit(SocketEvents.RoomMemberLeft, { userId });
     });
 
-    socket.on(SocketEvents.PlaybackPlay, async (payload) => {
+    handle(SocketEvents.PlaybackPlay, async (payload) => {
       const parsed = playbackActionPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code) || !(await canControlPlayback(code, userId))) return;
+      if (!(await ensureInRoom(socket, code, userId)) || !(await canControlPlayback(code, userId))) return;
       const state = await roomState.play(code, parsed.data.atTime);
       io.to(code).emit(SocketEvents.PlaybackSync, toWire(state, "user"));
     });
 
-    socket.on(SocketEvents.PlaybackPause, async (payload) => {
+    handle(SocketEvents.PlaybackPause, async (payload) => {
       const parsed = playbackActionPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code) || !(await canControlPlayback(code, userId))) return;
+      if (!(await ensureInRoom(socket, code, userId)) || !(await canControlPlayback(code, userId))) return;
       const state = await roomState.pause(code, parsed.data.atTime);
       io.to(code).emit(SocketEvents.PlaybackSync, toWire(state, "user"));
     });
 
-    socket.on(SocketEvents.PlaybackSeek, async (payload) => {
+    handle(SocketEvents.PlaybackSeek, async (payload) => {
       const parsed = playbackSeekPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code) || !(await canControlPlayback(code, userId))) return;
+      if (!(await ensureInRoom(socket, code, userId)) || !(await canControlPlayback(code, userId))) return;
       const state = await roomState.seek(code, parsed.data.toTime);
       io.to(code).emit(SocketEvents.PlaybackSync, toWire(state, "user"));
     });
 
     // Host toggles who can control playback.
-    socket.on(SocketEvents.RoomSetControl, async (payload) => {
+    handle(SocketEvents.RoomSetControl, async (payload) => {
       const parsed = roomSetControlPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!(await ensureInRoom(socket, code, userId))) return;
       try {
         const room = await setPlaybackControl(userId, code, parsed.data.playbackControl);
         const snapshot = await roomState.snapshot(code);
@@ -168,11 +198,11 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     });
 
     // Real-time chat.
-    socket.on(SocketEvents.ChatSend, (payload) => {
+    handle(SocketEvents.ChatSend, async (payload) => {
       const parsed = chatSendPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!(await ensureInRoom(socket, code, userId))) return;
       io.to(code).emit(SocketEvents.ChatMessage, {
         id: randomUUID(),
         userId,
@@ -183,32 +213,32 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     });
 
     // Host shares subtitles (WebVTT) with the room.
-    socket.on(SocketEvents.SubtitleSet, async (payload) => {
+    handle(SocketEvents.SubtitleSet, async (payload) => {
       const parsed = subtitleSetPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!(await ensureInRoom(socket, code, userId))) return;
       const control = await getRoomControl(code);
       if (control?.hostId !== userId) return; // host-only
       io.to(code).emit(SocketEvents.SubtitleChanged, { fileName: parsed.data.fileName, vtt: parsed.data.vtt });
     });
 
-    socket.on(SocketEvents.SubtitleClear, async (payload) => {
+    handle(SocketEvents.SubtitleClear, async (payload) => {
       const parsed = subtitleClearPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!(await ensureInRoom(socket, code, userId))) return;
       const control = await getRoomControl(code);
       if (control?.hostId !== userId) return;
       io.to(code).emit(SocketEvents.SubtitleCleared, {});
     });
 
     // Host chooses the video source for the room.
-    socket.on(SocketEvents.VideoSetSource, async (payload) => {
+    handle(SocketEvents.VideoSetSource, async (payload) => {
       const parsed = videoSetSourcePayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!(await ensureInRoom(socket, code, userId))) return;
 
       try {
         const room = await setRoomSource(userId, code, parsed.data.source);
@@ -222,11 +252,11 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     });
 
     // File verification (host sets a local-file source; members report theirs).
-    socket.on(SocketEvents.FileVerify, async (payload) => {
+    handle(SocketEvents.FileVerify, async (payload) => {
       const parsed = fileVerifyPayloadSchema.safeParse(payload);
       if (!parsed.success) return;
       const code = parsed.data.roomCode.toUpperCase();
-      if (!socket.rooms.has(code)) return;
+      if (!(await ensureInRoom(socket, code, userId))) return;
 
       try {
         const room = await getRoomByCode(code);

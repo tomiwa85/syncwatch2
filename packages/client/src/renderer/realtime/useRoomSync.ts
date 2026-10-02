@@ -53,6 +53,10 @@ export function useRoomSync(roomCode: string): RoomSync {
   const [messages, setMessages] = useState<ChatMessagePayload[]>([]);
   const [subtitle, setSubtitleState] = useState<SubtitleChangedPayload | null>(null);
   const [verifyPending, setVerifyPending] = useState(false);
+  // The file being verified, kept until the server answers — so it can be
+  // re-sent if the connection dropped (e.g. Android file picker) and the
+  // original message was lost.
+  const pendingVerify = useRef<{ fileName: string; fileSize: number } | null>(null);
   const playbackRef = useRef(playback);
   playbackRef.current = playback;
 
@@ -90,6 +94,7 @@ export function useRoomSync(roomCode: string): RoomSync {
     const onDisconnect = () => setConnected(false);
 
     const onRoomState = (payload: RoomStatePayload) => {
+      if (pendingVerify.current) socket.emit(SocketEvents.FileVerify, { roomCode, ...pendingVerify.current });
       updateRoom(payload.room);
       setPlayback(payload.playback);
       const authoritative = { currentTime: payload.playback.currentTime, isPlaying: payload.playback.isPlaying };
@@ -118,7 +123,10 @@ export function useRoomSync(roomCode: string): RoomSync {
       updateRoom({ ...room, members: room.members.filter((m) => m.userId !== payload.userId) });
     };
     const onVerifyResult = (payload: FileVerifyResultPayload) => {
-      if (payload.userId === useAuthStore.getState().user?.id) setVerifyPending(false);
+      if (payload.userId === useAuthStore.getState().user?.id) {
+        pendingVerify.current = null;
+        setVerifyPending(false);
+      }
       const room = useNavStore.getState().currentRoom;
       if (!room) return;
       updateRoom({
@@ -184,6 +192,7 @@ export function useRoomSync(roomCode: string): RoomSync {
     setMessages([]);
     setSubtitleState(null);
     setVerifyPending(false);
+    pendingVerify.current = null;
   }, [roomCode]);
 
   // Live-projected authoritative time (for the readout when no player is mounted).
@@ -211,6 +220,7 @@ export function useRoomSync(roomCode: string): RoomSync {
     engine,
     setSource: (source) => getSocket().emit(SocketEvents.VideoSetSource, { roomCode, source }),
     verifyFile: (fileName, fileSize) => {
+      pendingVerify.current = { fileName, fileSize };
       setVerifyPending(true);
       getSocket().emit(SocketEvents.FileVerify, { roomCode, fileName, fileSize });
     },

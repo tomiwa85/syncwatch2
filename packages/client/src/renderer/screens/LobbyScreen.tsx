@@ -22,6 +22,7 @@ import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
 import { Tour, type TourStep } from "../components/Tour.js";
 import { TopBar } from "./TopBar.js";
+import { BUILD_LABEL } from "../config.js";
 
 const TOUR_KEY = "syncwatch-tour-lobby-v1";
 const TOUR_STEPS: TourStep[] = [
@@ -283,6 +284,7 @@ export function LobbyScreen() {
             </Card>
           )}
         </section>
+        <p className="mt-12 text-center text-[11px] text-muted/60">SyncWatch · {BUILD_LABEL}</p>
       </main>
 
       {/* Create-room modal (shared with My Rooms) */}

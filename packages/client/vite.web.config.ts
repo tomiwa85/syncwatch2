@@ -8,6 +8,11 @@ import react from "@vitejs/plugin-react";
 // points at the hosted server.
 const BACKEND_URL = "https://syncwatch-server-szu2.onrender.com";
 
+// CI (GitHub Actions) provides the run number and commit; local builds say so.
+const BUILD_LABEL = process.env.GITHUB_RUN_NUMBER
+  ? `Build #${process.env.GITHUB_RUN_NUMBER} · ${(process.env.GITHUB_SHA ?? "").slice(0, 7)}`
+  : "Local build";
+
 export default defineConfig({
   root: resolve(__dirname, "src/renderer"),
   base: "./",
@@ -15,6 +20,7 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_API_BASE_URL": JSON.stringify(BACKEND_URL),
     "import.meta.env.VITE_SOCKET_URL": JSON.stringify(BACKEND_URL),
+    "import.meta.env.VITE_BUILD_LABEL": JSON.stringify(BUILD_LABEL),
   },
   build: {
     outDir: resolve(__dirname, "dist-web"),
