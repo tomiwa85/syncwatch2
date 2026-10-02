@@ -16,9 +16,14 @@ export async function buildApp() {
   await app.register(roomRoutes);
   await app.register(userRoutes);
 
-  // Also touches the database so a ping wakes Neon (it suspends when idle), not
-  // just this process — otherwise the first sign-in after a quiet spell still
-  // pays the DB wake-up even when the server itself is warm.
+  // Keep-alive target: proves the process is up WITHOUT touching the database.
+  // Pinging the DB around the clock would keep Neon's compute running 24/7 and
+  // burn its free monthly allowance; Neon wakes in under a second on its own.
+  // logLevel "warn" keeps the every-10-minutes pings out of the request log.
+  app.get("/api/ping", { logLevel: "warn" }, async () => ({ ok: true }));
+
+  // Full health check (also wakes the DB). The app calls this once when it opens,
+  // so the database is warm by the time the user signs in. Not for keep-alives.
   app.get("/api/health", async () => {
     try {
       await prisma.$queryRaw`SELECT 1`;

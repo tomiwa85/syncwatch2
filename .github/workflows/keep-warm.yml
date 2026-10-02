@@ -13,7 +13,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping backend (also wakes the database)
+      - name: Ping backend (server only — the DB is left to sleep)
         run: |
           curl -sS -o /dev/null -w "ping %{http_code} in %{time_total}s\n" \
-            --max-time 90 https://syncwatch-server-szu2.onrender.com/api/health || true
+            --max-time 90 https://syncwatch-server-szu2.onrender.com/api/ping || true
