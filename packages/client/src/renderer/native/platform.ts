@@ -25,7 +25,8 @@ export function syncStatusBar(theme: "dark" | "light"): void {
   void StatusBar.setBackgroundColor({ color: dark ? "#080B16" : "#EEF0F8" }).catch(() => {});
 }
 
-/** Hide/show the status bar AND the bottom navigation bar (immersive video). */
+/** Fullscreen video on/off. The bottom navigation bar is hidden on every screen
+ *  natively (MainActivity); in fullscreen the status bar is hidden too. */
 export function setSystemBarsHidden(hidden: boolean): void {
   if (!isNative) return;
   void (hidden ? Immersive.enter() : Immersive.exit()).catch(() => {
