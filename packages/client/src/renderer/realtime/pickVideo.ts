@@ -7,13 +7,34 @@ export interface PickedVideo {
   filePath?: string;
 }
 
+export interface PrepareProgress {
+  phase: "analyzing" | "preparing" | "starting";
+  percent: number | null;
+}
+
 interface SyncwatchBridge {
   pickVideoFile: () => Promise<PickedVideo | null>;
-  prepareVideo: (filePath: string) => Promise<{ playbackUrl: string }>;
+  prepareVideo: (filePath: string, opts?: { allowHevc?: boolean }) => Promise<{ playbackUrl: string }>;
+  onPrepareProgress?: (cb: (p: PrepareProgress) => void) => () => void;
+}
+
+/** Whether this device/OS can decode HEVC (H.265) in an HTML5 <video>. */
+function canPlayHevc(): boolean {
+  try {
+    const v = document.createElement("video");
+    return v.canPlayType('video/mp4; codecs="hvc1"') !== "" || v.canPlayType('video/mp4; codecs="hev1"') !== "";
+  } catch {
+    return false;
+  }
 }
 
 function getBridge(): SyncwatchBridge | undefined {
   return (window as unknown as { syncwatch?: SyncwatchBridge }).syncwatch;
+}
+
+/** Subscribe to local-file conversion progress. No-op (returns noop) in the browser. */
+export function onPrepareProgress(cb: (p: PrepareProgress) => void): () => void {
+  return getBridge()?.onPrepareProgress?.(cb) ?? (() => {});
 }
 
 /** True in the packaged Electron app (native dialog + sw-video:// protocol available). */
@@ -29,7 +50,7 @@ export function hasNativePicker(): boolean {
 export async function prepareForPlayback(picked: PickedVideo): Promise<string> {
   const bridge = getBridge();
   if (bridge?.prepareVideo && picked.filePath) {
-    const { playbackUrl } = await bridge.prepareVideo(picked.filePath);
+    const { playbackUrl } = await bridge.prepareVideo(picked.filePath, { allowHevc: canPlayHevc() });
     return playbackUrl;
   }
   return picked.playbackUrl;

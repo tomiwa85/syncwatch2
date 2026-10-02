@@ -5,11 +5,15 @@ import { registerFileDialogHandlers } from "./ipc/file-dialog.js";
 import { registerLocalVideoProtocol, registerAppProtocol, LOCAL_VIDEO_SCHEME, APP_SCHEME } from "./protocol.js";
 import { registerVideoConvert } from "./video-convert.js";
 
-// Prefer a real PNG logo (drop your brand PNG at resources/icon.png). Falls
-// back to Electron's default if it isn't present yet.
+// The window/taskbar icon = the SyncWatch logo. Prefer .ico on Windows (crisper
+// at small sizes); the icon is bundled inside the app (asar) at resources/, and
+// also copied alongside as an extra resource — check both, plus dev paths.
 function resolveWindowIcon(): string | undefined {
   const candidates = [
+    join(__dirname, "../../resources/icon.ico"),
     join(__dirname, "../../resources/icon.png"),
+    join(process.resourcesPath ?? "", "icon.ico"),
+    join(process.resourcesPath ?? "", "icon.png"),
     join(process.cwd(), "resources/icon.png"),
   ];
   return candidates.find((p) => existsSync(p));
