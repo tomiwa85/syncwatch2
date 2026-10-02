@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { cn } from "../cn.js";
 import { XCircleIcon } from "../icons.js";
+import { BackPriority, useBackHandler } from "../../native/back-button.js";
 
 type IconComponent = ComponentType<{ size?: number }>;
 export type ModalTone = "brand" | "danger" | "success" | "info" | "warning";
@@ -39,6 +40,8 @@ export function Modal({
   className,
   showClose = true,
 }: ModalProps) {
+  // Android Back closes the dialog instead of leaving the screen.
+  useBackHandler(open, () => onOpenChange(false), BackPriority.dialog);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>

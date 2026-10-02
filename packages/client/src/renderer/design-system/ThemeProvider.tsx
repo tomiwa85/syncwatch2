@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { syncStatusBar } from "../native/platform.js";
 
 type Theme = "dark" | "light";
 
@@ -15,6 +16,7 @@ export function ThemeProvider({ children, defaultTheme = "dark" }: { children: R
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    syncStatusBar(theme); // Android status bar follows the app theme
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));

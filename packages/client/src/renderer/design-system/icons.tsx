@@ -21,6 +21,16 @@ function Base({ size = 20, children, ...props }: IconProps & { children: React.R
   );
 }
 
+/** Rotate-device arrow — for tilt-to-fullscreen. */
+export const RotateIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="8" y="3" width="8" height="13" rx="1.5" />
+    <path d="M3 13a9 9 0 0 0 9 8" />
+    <path d="M3 17v-4h4" />
+    <path d="M21 11a9 9 0 0 0-5-8" />
+  </Base>
+);
+
 /* ---- Status / message icons (used in toasts, modals, confirms) ---- */
 
 export const MessageIcon = (p: IconProps) => (

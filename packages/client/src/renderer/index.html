@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets fullscreen video use env(safe-area-inset-*) around notches -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#080B16" />
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; img-src 'self' data: https:; media-src 'self' sw-video: blob: https:; connect-src 'self' http://localhost:4000 ws://localhost:4000 ws://localhost:5173 https: wss:; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.youtube.com https://s.ytimg.com https://player.vimeo.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com"

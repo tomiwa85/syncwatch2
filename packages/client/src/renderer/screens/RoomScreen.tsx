@@ -25,11 +25,12 @@ import { StreamingVideoPlayer } from "../components/StreamingVideoPlayer.js";
 import { PlayerStage, type PlayerMenuItem } from "../components/PlayerStage.js";
 import { ChatPanel } from "../components/ChatPanel.js";
 import type { PlayerHandle } from "../realtime/sync-engine.js";
-import { pickVideo, prepareForPlayback, type PickedVideo } from "../realtime/pickVideo.js";
+import { pickVideo, prepareForPlayback, onPrepareProgress, type PickedVideo, type PrepareProgress } from "../realtime/pickVideo.js";
 import { pickSubtitle } from "../realtime/subtitles.js";
 import { useAuthStore } from "../state/auth.store.js";
 import { useNavStore } from "../state/nav.store.js";
 import { useRoomSync } from "../realtime/useRoomSync.js";
+import { BackPriority, useBackHandler } from "../native/back-button.js";
 import { TopBar } from "./TopBar.js";
 
 function formatTime(seconds: number): string {
@@ -71,7 +72,12 @@ export function RoomScreen() {
   const [urlInput, setUrlInput] = useState("");
   const [changing, setChanging] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [prepProgress, setPrepProgress] = useState<PrepareProgress | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
+
+  // Android Back in a room asks before leaving, rather than dropping you out of
+  // the movie (dialogs and fullscreen video claim Back first).
+  useBackHandler(true, () => setLeaveOpen(true), BackPriority.screen);
 
   const sig = sourceSig(room?.source ?? null);
 
@@ -129,6 +135,7 @@ export function RoomScreen() {
     if (!picked) return;
     setChanging(false);
     setPreparing(true);
+    const unsub = onPrepareProgress(setPrepProgress);
     try {
       const playbackUrl = await prepareForPlayback(picked);
       setMyVideo({ ...picked, playbackUrl, forSig: `LF:${picked.fileName}:${picked.fileSize}` });
@@ -137,7 +144,9 @@ export function RoomScreen() {
     } catch (e) {
       toast({ title: "Couldn't prepare that video", description: e instanceof Error ? e.message : "", tone: "danger" });
     } finally {
+      unsub();
       setPreparing(false);
+      setPrepProgress(null);
     }
   }
 
@@ -157,6 +166,7 @@ export function RoomScreen() {
     const picked = await pickVideo();
     if (!picked || !source || source.sourceType !== "LOCAL_FILE") return;
     setPreparing(true);
+    const unsub = onPrepareProgress(setPrepProgress);
     try {
       const playbackUrl = await prepareForPlayback(picked);
       setMyVideo({ ...picked, playbackUrl, forSig: sig });
@@ -164,7 +174,9 @@ export function RoomScreen() {
     } catch (e) {
       toast({ title: "Couldn't prepare that video", description: e instanceof Error ? e.message : "", tone: "danger" });
     } finally {
+      unsub();
       setPreparing(false);
+      setPrepProgress(null);
     }
   }
 
@@ -256,9 +268,27 @@ export function RoomScreen() {
           {preparing ? (
             <Card className="flex aspect-video flex-col items-center justify-center gap-4 border-dashed bg-bg-2 text-center">
               <span className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent" />
-              <div>
-                <p className="font-medium">Preparing video…</p>
-                <p className="text-sm text-muted">Getting your file ready to play. This is quick for most videos.</p>
+              <div className="w-full max-w-xs">
+                <p className="font-medium">
+                  {prepProgress?.phase === "analyzing"
+                    ? "Analyzing video…"
+                    : prepProgress?.phase === "starting"
+                      ? "Starting playback…"
+                      : "Preparing video…"}
+                </p>
+                <p className="text-sm text-muted">
+                  {prepProgress?.phase === "analyzing"
+                    ? "Checking the format and codecs."
+                    : "Getting your file ready to play — quick for most videos."}
+                </p>
+                {typeof prepProgress?.percent === "number" && (
+                  <div className="mx-auto mt-3 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-raised">
+                      <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${prepProgress.percent}%` }} />
+                    </div>
+                    <span className="font-mono text-xs tabular-nums text-muted">{prepProgress.percent}%</span>
+                  </div>
+                )}
               </div>
             </Card>
           ) : showChooser ? (

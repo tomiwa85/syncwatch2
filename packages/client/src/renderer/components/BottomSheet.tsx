@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { cn } from "../design-system/cn.js";
 import { XCircleIcon } from "../design-system/icons.js";
+import { BackPriority, useBackHandler } from "../native/back-button.js";
 
 /** A glassmorphic panel that slides up from the bottom with a blurred backdrop. */
 export function BottomSheet({
@@ -14,6 +15,8 @@ export function BottomSheet({
   title?: ReactNode;
   children: ReactNode;
 }) {
+  useBackHandler(open, onClose, BackPriority.dialog);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
